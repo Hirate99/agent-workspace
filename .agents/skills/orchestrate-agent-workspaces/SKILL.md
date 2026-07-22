@@ -1,6 +1,6 @@
 ---
 name: orchestrate-agent-workspaces
-description: Plan and execute multi-agent coding work as isolated Git worktree transactions. Use when Codex must split implementation among parallel writing agents, prevent shared-workspace conflicts, allocate task scopes or exclusive resources, collect worker commits, or serialize integration and validation.
+description: Create isolated Git worktree transactions for coding tasks. Use when Codex is asked to start implementation on a new branch or workspace, isolate writes from the current checkout, coordinate one or more writing agents, prevent shared-workspace conflicts, allocate scopes or exclusive resources, collect worker commits, or serialize integration and validation. Do not use for read-only research, review, or explanation.
 ---
 
 # Orchestrate Agent Workspaces
@@ -13,6 +13,12 @@ Treat every writing agent as a transaction: isolate its writes, collect a commit
 - Run `node <skill-dir>/dist/cli.js --help` to inspect the installed CLI.
 - If separate worktrees are unavailable, parallelize only research, review, and tests. Keep file writes serial.
 - Keep workers away from `checkout`, `switch`, `reset`, `stash`, `merge`, final-branch pushes, and other tasks' worktrees.
+
+## Choose the transaction shape
+
+- For one implementation task or a request to start work on a new branch or workspace, create one transaction and do all writes in the returned worktree. Keep the original checkout unchanged.
+- For multiple writing agents, create one transaction per independent task and integrate them serially.
+- For read-only research, explanation, or review, do not create a worktree unless the user explicitly asks for one.
 
 ## Plan the work
 
