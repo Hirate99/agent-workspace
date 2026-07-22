@@ -1,14 +1,14 @@
 import { mkdir, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
-import { CommandError, git, runShell } from "./git.ts";
+import { CommandError, git, runShell } from "./git.js";
 import {
   assertTaskId,
   isPathInScope,
   normalizeScope,
   unique,
   type TaskState,
-} from "./model.ts";
-import { listTasks, loadTask, saveTask, withRepoLock } from "./store.ts";
+} from "./model.js";
+import { listTasks, loadTask, saveTask, withRepoLock } from "./store.js";
 
 export interface RepoInfo {
   root: string;

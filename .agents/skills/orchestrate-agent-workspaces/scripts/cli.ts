@@ -1,4 +1,6 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
+
+import { pathToFileURL } from "node:url";
 
 import {
   cleanupTask,
@@ -6,7 +8,7 @@ import {
   integrateTask,
   submitTask,
   taskStatus,
-} from "./workspace.ts";
+} from "./workspace.js";
 
 const HELP = `agent-workspace <command> [task] [options]
 
@@ -144,10 +146,11 @@ function assertAllowed(parsed: ParsedArgs, allowed: string[]): void {
   }
 }
 
-if (import.meta.main) {
-  main(Bun.argv.slice(2)).catch((error: unknown) => {
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  main(process.argv.slice(2)).catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error));
-    if (Bun.env.AGENT_WORKSPACE_DEBUG && error instanceof Error) console.error(error.stack);
+    if (process.env.AGENT_WORKSPACE_DEBUG && error instanceof Error) console.error(error.stack);
     process.exitCode = 1;
   });
 }

@@ -14,11 +14,11 @@ interface CliResult {
 
 const cli = resolve(
   import.meta.dir,
-  "../.agents/skills/orchestrate-agent-workspaces/scripts/cli.ts",
+  "../.agents/skills/orchestrate-agent-workspaces/dist/cli.js",
 );
 
 async function runCli(args: string[]): Promise<CliResult> {
-  const process = Bun.spawn(["bun", cli, ...args], {
+  const process = Bun.spawn(["node", cli, ...args], {
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",

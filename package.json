@@ -3,17 +3,21 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "agent-workspace": ".agents/skills/orchestrate-agent-workspaces/scripts/cli.ts"
+    "agent-workspace": ".agents/skills/orchestrate-agent-workspaces/dist/cli.js"
   },
   "scripts": {
-    "agent-workspace": "bun .agents/skills/orchestrate-agent-workspaces/scripts/cli.ts",
+    "agent-workspace": "node .agents/skills/orchestrate-agent-workspaces/dist/cli.js",
     "test": "bun test --timeout 20000",
     "test:coverage": "bun test --coverage --coverage-reporter=text --timeout 30000",
     "typecheck": "tsc --noEmit",
-    "test:package": "bun scripts/test-package.ts"
+    "test:package": "bun scripts/test-package.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "test:node": "npm run build && node .agents/skills/orchestrate-agent-workspaces/dist/cli.js --help"
   },
   "devDependencies": {
     "@types/bun": "^1.3.1",
+    "@types/node": "^26.1.1",
     "typescript": "^5.9.3"
   },
   "description": "Transactional Git worktrees for isolated coding-agent changes and serialized integration.",
@@ -37,10 +41,10 @@
     "cli"
   ],
   "engines": {
-    "bun": ">=1.3.0",
-    "git": ">=2.31.0"
+    "node": ">=18"
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "license": "MIT"
 }

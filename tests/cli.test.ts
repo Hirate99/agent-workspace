@@ -9,10 +9,10 @@ test("CLI emits a durable task record as JSON", async () => {
   const fixture = await createFixture();
   const cli = resolve(
     import.meta.dir,
-    "../.agents/skills/orchestrate-agent-workspaces/scripts/cli.ts",
+    "../.agents/skills/orchestrate-agent-workspaces/dist/cli.js",
   );
   const create = Bun.spawn(
-    ["bun", cli, "create", "CLI1", "--repo", fixture.repo, "--root", fixture.worktrees, "--scope", "."],
+    ["node", cli, "create", "CLI1", "--repo", fixture.repo, "--root", fixture.worktrees, "--scope", "."],
     { stdout: "pipe", stderr: "pipe" },
   );
   const createOutput = new Response(create.stdout).text();
@@ -21,7 +21,7 @@ test("CLI emits a durable task record as JSON", async () => {
   const created = JSON.parse(await createOutput) as { id: string; status: string };
   expect(created).toMatchObject({ id: "CLI1", status: "active" });
 
-  const status = Bun.spawn(["bun", cli, "status", "CLI1", "--repo", fixture.repo], {
+  const status = Bun.spawn(["node", cli, "status", "CLI1", "--repo", fixture.repo], {
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -31,7 +31,7 @@ test("CLI emits a durable task record as JSON", async () => {
   expect(JSON.parse(await statusOutput)).toMatchObject({ id: "CLI1", status: "active" });
 
   const rejectedCleanup = Bun.spawn(
-    ["bun", cli, "cleanup", "CLI1", "--repo", fixture.repo],
+    ["node", cli, "cleanup", "CLI1", "--repo", fixture.repo],
     { stdout: "pipe", stderr: "pipe" },
   );
   const cleanupError = new Response(rejectedCleanup.stderr).text();

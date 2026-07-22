@@ -1,6 +1,8 @@
-import { mkdir, open, readFile, readdir, rename, unlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, open, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { TaskState } from "./model.ts";
+import { setTimeout as delay } from "node:timers/promises";
+import type { TaskState } from "./model.js";
 
 export function storeDir(commonDir: string): string {
   return join(commonDir, "agent-workspace");
@@ -43,8 +45,8 @@ export async function saveTask(state: TaskState): Promise<void> {
   const directory = tasksDir(state.commonDir);
   await mkdir(directory, { recursive: true });
   const target = taskPath(state.commonDir, state.id);
-  const temporary = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
-  await Bun.write(temporary, `${JSON.stringify(state, null, 2)}\n`);
+  const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`);
   await rename(temporary, target);
 }
 
@@ -66,7 +68,7 @@ export async function withRepoLock<T>(
       if (Date.now() >= deadline) {
         throw new Error(`repository ${name} lock is already held: ${path}`);
       }
-      await Bun.sleep(25);
+      await delay(25);
     }
   }
 

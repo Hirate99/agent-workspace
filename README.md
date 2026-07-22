@@ -2,12 +2,12 @@
 
 A small transaction layer for parallel coding agents: one Git worktree per writer, durable task metadata, scope checks, and a single serialized integration path.
 
-It deliberately does not provide a daemon, distributed locks, containers, or semantic merge automation. The included Codex Skill plans the work; the Bun CLI enforces the local isolation primitive.
+It deliberately does not provide a daemon, distributed locks, containers, or semantic merge automation. The included Codex Skill plans the work; the Node.js CLI enforces the local isolation primitive.
 
 ## Requirements
 
 - Git 2.31 or newer
-- Bun 1.3 or newer
+- Node.js 18 or newer
 - A repository with at least one commit
 
 ## Install the CLI
@@ -16,15 +16,16 @@ It deliberately does not provide a daemon, distributed locks, containers, or sem
 npm install --global @mskyurina/agent-workspace
 ```
 
-Bun and Git are required at runtime. The CLI has no runtime package dependencies.
+Node.js 18+ and Git are required at runtime. The CLI has no runtime package dependencies.
 
-To develop from source or use the bundled Skill directly:
+To develop from source:
 
 ```sh
 git clone https://github.com/Hirate99/agent-workspace.git
 cd agent-workspace
 bun install
-bun link
+npm run build
+npm link
 ```
 
 The Skill is self-contained at `.agents/skills/orchestrate-agent-workspaces`.
@@ -56,8 +57,8 @@ agent-workspace submit T123 --repo /path/to/worker
 # Integrate from the clean main worktree. Checks are optional and repeatable.
 agent-workspace integrate T123 \
   --repo /path/to/repo \
-  --check "bun run typecheck" \
-  --check "bun test"
+  --check "npm run typecheck" \
+  --check "npm test"
 
 # Remove the integrated worktree and worker branch.
 agent-workspace cleanup T123 --repo /path/to/repo
@@ -78,11 +79,14 @@ This prevents physical workspace conflicts and catches declared scope violations
 
 ## Development
 
+Contributors also need Bun 1.3 or newer for the test suite.
+
 ```sh
+npm run build
 bun run typecheck
 bun test
 bun run test:coverage
 bun run test:package
 ```
 
-The end-to-end tests create disposable Git repositories and exercise real worktree, concurrent submission, serialized integration, commit conflicts, scope enforcement, rollback, and cleanup behavior. The package smoke test builds the actual npm tarball, checks its contents, installs it into a clean consumer project, and invokes the installed CLI. Coverage fails below 90% for lines, functions, or statements. GitHub Actions runs the same gates on Windows and Ubuntu.
+The end-to-end tests create disposable Git repositories and exercise real worktree, concurrent submission, serialized integration, commit conflicts, scope enforcement, rollback, and cleanup behavior. The package smoke test builds the actual npm tarball, checks its contents, installs it into a clean consumer project, and invokes the installed CLI with Node.js. Coverage fails below 90% for lines, functions, or statements. GitHub Actions runs the same gates on Windows and Ubuntu.

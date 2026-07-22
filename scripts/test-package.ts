@@ -1,6 +1,6 @@
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 interface PackedFile {
   path: string;
@@ -14,12 +14,16 @@ interface PackResult {
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const decoder = new TextDecoder();
 
-function run(command: string[], cwd: string): string {
+function run(
+  command: string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
   const result = Bun.spawnSync(command, {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
-    env: process.env,
+    env,
   });
 
   const stdout = decoder.decode(result.stdout);
@@ -59,6 +63,8 @@ try {
     ".agents/skills/orchestrate-agent-workspaces/SKILL.md",
     ".agents/skills/orchestrate-agent-workspaces/scripts/cli.ts",
     ".agents/skills/orchestrate-agent-workspaces/scripts/workspace.ts",
+    ".agents/skills/orchestrate-agent-workspaces/dist/cli.js",
+    ".agents/skills/orchestrate-agent-workspaces/dist/workspace.js",
   ];
   for (const path of required) {
     if (!paths.has(path)) throw new Error("published package is missing " + path);
@@ -80,15 +86,56 @@ try {
     consumerDirectory,
   );
 
+  const finder = process.platform === "win32" ? "where.exe" : "which";
+  const nodeExecutable = run([finder, "node"], consumerDirectory).trim().split(/\r?\n/)[0];
+  const gitExecutable = run([finder, "git"], consumerDirectory).trim().split(/\r?\n/)[0];
+  if (!nodeExecutable || !gitExecutable) {
+    throw new Error("Node.js and Git must be available for the package smoke test");
+  }
+
+  const runtimePath = [dirname(nodeExecutable), dirname(gitExecutable)];
+  if (process.platform === "win32" && process.env.SystemRoot) {
+    runtimePath.push(join(process.env.SystemRoot, "System32"), process.env.SystemRoot);
+  }
+  const runtimeEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => name.toLowerCase() !== "path"),
+  ) as NodeJS.ProcessEnv;
+  runtimeEnv.PATH = [...new Set(runtimePath)].join(delimiter);
+
+  const bunProbe = Bun.spawnSync([finder, "bun"], {
+    cwd: consumerDirectory,
+    env: runtimeEnv,
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  if (bunProbe.exitCode === 0) {
+    throw new Error("Bun unexpectedly remained available in the runtime smoke-test PATH");
+  }
+
   const executable = join(
     consumerDirectory,
     "node_modules",
     ".bin",
     process.platform === "win32" ? "agent-workspace.cmd" : "agent-workspace",
   );
-  const help = run([executable, "--help"], consumerDirectory);
+  const help = run([executable, "--help"], consumerDirectory, runtimeEnv);
   if (!help.includes("agent-workspace <command>")) {
     throw new Error("installed CLI did not print the expected help output");
+  }
+
+  const repository = join(scratch, "repository");
+  await mkdir(repository);
+  run([gitExecutable, "init"], repository, runtimeEnv);
+  run([gitExecutable, "config", "user.email", "package-test@example.com"], repository, runtimeEnv);
+  run([gitExecutable, "config", "user.name", "Package Test"], repository, runtimeEnv);
+  await writeFile(join(repository, "README.md"), "base\n", "utf8");
+  run([gitExecutable, "add", "README.md"], repository, runtimeEnv);
+  run([gitExecutable, "commit", "-m", "base"], repository, runtimeEnv);
+  const status = JSON.parse(
+    run([executable, "status", "--repo", repository], consumerDirectory, runtimeEnv),
+  ) as unknown[];
+  if (status.length !== 0) {
+    throw new Error("fresh repository unexpectedly contained task records");
   }
 
   console.log(
@@ -96,7 +143,7 @@ try {
       result.filename +
       ", " +
       paths.size +
-      " files, installed CLI executable",
+      " files, installed Node.js CLI without Bun",
   );
 } finally {
   await rm(scratch, { recursive: true, force: true });

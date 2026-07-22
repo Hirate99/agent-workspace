@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+
 export interface RunOptions {
   allowFailure?: boolean;
   env?: Record<string, string | undefined>;
@@ -30,20 +32,26 @@ export async function run(
   cwd: string,
   options: RunOptions = {},
 ): Promise<RunResult> {
-  const process = Bun.spawn(command, {
+  const child = spawn(command[0]!, command.slice(1), {
     cwd,
-    env: { ...Bun.env, ...options.env },
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
+    env: { ...process.env, ...options.env },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
   });
-  const stdout = new Response(process.stdout).text();
-  const stderr = new Response(process.stderr).text();
-  const [exitCode, stdoutText, stderrText] = await Promise.all([
-    process.exited,
-    stdout,
-    stderr,
-  ]);
+  let stdoutText = "";
+  let stderrText = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdoutText += chunk;
+  });
+  child.stderr.on("data", (chunk: string) => {
+    stderrText += chunk;
+  });
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code) => resolve(code ?? 1));
+  });
   const result = { command, cwd, exitCode, stdout: stdoutText, stderr: stderrText };
   if (exitCode !== 0 && !options.allowFailure) {
     throw new CommandError(result);
