@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
   cleanupTask,
@@ -146,7 +147,10 @@ function assertAllowed(parsed: ParsedArgs, allowed: string[]): void {
   }
 }
 
-const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const entryPoint = process.argv[1];
+const isMain =
+  entryPoint !== undefined &&
+  realpathSync(entryPoint) === realpathSync(fileURLToPath(import.meta.url));
 if (isMain) {
   main(process.argv.slice(2)).catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error));

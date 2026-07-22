@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -19,20 +20,45 @@ function run(
   cwd: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const result = Bun.spawnSync(command, {
+  if (process.platform === "win32") {
+    const result = Bun.spawnSync(command, {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+      env,
+    });
+    const stdout = decoder.decode(result.stdout);
+    const stderr = decoder.decode(result.stderr);
+    if (result.exitCode !== 0) {
+      throw new Error(
+        command.join(" ") +
+          " failed with exit " +
+          result.exitCode +
+          "\n" +
+          stdout +
+          stderr,
+      );
+    }
+    return stdout;
+  }
+
+  const [executable, ...args] = command;
+  if (!executable) throw new Error("cannot run an empty command");
+  const result = spawnSync(executable, args, {
     cwd,
-    stdout: "pipe",
-    stderr: "pipe",
+    encoding: "utf8",
     env,
   });
-
-  const stdout = decoder.decode(result.stdout);
-  const stderr = decoder.decode(result.stderr);
-  if (result.exitCode !== 0) {
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
+  if (result.error) {
+    throw new Error(command.join(" ") + " failed: " + result.error.message);
+  }
+  if (result.status !== 0) {
     throw new Error(
       command.join(" ") +
         " failed with exit " +
-        result.exitCode +
+        result.status +
         "\n" +
         stdout +
         stderr,
