@@ -7,17 +7,27 @@ It deliberately does not provide a daemon, distributed locks, containers, or sem
 ## Requirements
 
 - Git 2.31 or newer
-- Bun 1.1 or newer
+- Bun 1.3 or newer
 - A repository with at least one commit
 
-## Install
+## Install the CLI
 
 ```sh
+npm install --global @mskyurina/agent-workspace
+```
+
+Bun and Git are required at runtime. The CLI has no runtime package dependencies.
+
+To develop from source or use the bundled Skill directly:
+
+```sh
+git clone https://github.com/Hirate99/agent-workspace.git
+cd agent-workspace
 bun install
 bun link
 ```
 
-The Skill is self-contained at `.agents/skills/orchestrate-agent-workspaces`. Its CLI has no runtime package dependencies.
+The Skill is self-contained at `.agents/skills/orchestrate-agent-workspaces`.
 
 ## Workflow
 
@@ -61,6 +71,7 @@ This prevents physical workspace conflicts and catches declared scope violations
 bun run typecheck
 bun test
 bun run test:coverage
+bun run test:package
 ```
 
-The end-to-end tests create disposable Git repositories and exercise real worktree, concurrent submission, serialized integration, commit conflicts, scope enforcement, rollback, and cleanup behavior. Coverage fails below 90% for lines, functions, or statements. GitHub Actions runs the same gates on Windows and Ubuntu.
+The end-to-end tests create disposable Git repositories and exercise real worktree, concurrent submission, serialized integration, commit conflicts, scope enforcement, rollback, and cleanup behavior. The package smoke test builds the actual npm tarball, checks its contents, installs it into a clean consumer project, and invokes the installed CLI. Coverage fails below 90% for lines, functions, or statements. GitHub Actions runs the same gates on Windows and Ubuntu.
