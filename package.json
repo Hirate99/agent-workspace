@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "agent-workspace": ".agents/skills/orchestrate-agent-workspaces/dist/cli.js"
+    "agent-workspace": "bin/agent-workspace.js"
   },
   "scripts": {
     "agent-workspace": "node .agents/skills/orchestrate-agent-workspaces/dist/cli.js",
@@ -23,7 +23,8 @@
   "description": "Transactional Git worktrees for isolated coding-agent changes and serialized integration.",
   "files": [
     ".agents/skills/orchestrate-agent-workspaces/**",
-    "README.md"
+    "README.md",
+    "bin/**"
   ],
   "repository": {
     "type": "git",

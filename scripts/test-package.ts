@@ -91,6 +91,7 @@ try {
     ".agents/skills/orchestrate-agent-workspaces/scripts/workspace.ts",
     ".agents/skills/orchestrate-agent-workspaces/dist/cli.js",
     ".agents/skills/orchestrate-agent-workspaces/dist/workspace.js",
+    "bin/agent-workspace.js",
   ];
   for (const path of required) {
     if (!paths.has(path)) throw new Error("published package is missing " + path);
