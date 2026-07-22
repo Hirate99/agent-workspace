@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { rm } from "node:fs/promises";
+import { rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { git } from "../.agents/skills/orchestrate-agent-workspaces/scripts/git.ts";
 import type { TaskState } from "../.agents/skills/orchestrate-agent-workspaces/scripts/model.ts";
@@ -59,6 +59,22 @@ describe("workspace transactions", () => {
     await expect(
       createTask(fixture.repo, "nested", {
         worktreeRoot: join(fixture.repo, ".workers"),
+      }),
+    ).rejects.toThrow("outside the main worktree");
+  });
+
+  test("canonicalizes path aliases before enforcing worktree boundaries", async () => {
+    const fixture = await createFixture();
+    const alias = join(fixture.root, "repo alias");
+    await symlink(
+      fixture.repo,
+      alias,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+
+    await expect(
+      createTask(alias, "alias_nested", {
+        worktreeRoot: join(alias, ".workers"),
       }),
     ).rejects.toThrow("outside the main worktree");
   });

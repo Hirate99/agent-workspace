@@ -1,4 +1,4 @@
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { CommandError, git, runShell } from "./git.ts";
 import {
@@ -34,13 +34,20 @@ export interface CleanupOptions {
 
 export async function getRepoInfo(input: string): Promise<RepoInfo> {
   const cwd = resolve(input);
-  const root = resolve((await git(cwd, ["rev-parse", "--show-toplevel"])).stdout.trim());
-  const gitDirValue = (await git(root, ["rev-parse", "--git-dir"])).stdout.trim();
-  const commonDirValue = (await git(root, ["rev-parse", "--git-common-dir"])).stdout.trim();
-  const gitDir = isAbsolute(gitDirValue) ? normalize(gitDirValue) : resolve(root, gitDirValue);
-  const commonDir = isAbsolute(commonDirValue)
-    ? normalize(commonDirValue)
-    : resolve(root, commonDirValue);
+  const reportedRoot = resolve(
+    (await git(cwd, ["rev-parse", "--show-toplevel"])).stdout.trim(),
+  );
+  const root = await realpath(reportedRoot);
+  const gitDirValue = (await git(reportedRoot, ["rev-parse", "--git-dir"])).stdout.trim();
+  const commonDirValue = (
+    await git(reportedRoot, ["rev-parse", "--git-common-dir"])
+  ).stdout.trim();
+  const gitDir = await realpath(
+    isAbsolute(gitDirValue) ? normalize(gitDirValue) : resolve(reportedRoot, gitDirValue),
+  );
+  const commonDir = await realpath(
+    isAbsolute(commonDirValue) ? normalize(commonDirValue) : resolve(reportedRoot, commonDirValue),
+  );
   return { root, gitDir, commonDir, isMain: samePath(gitDir, commonDir) };
 }
 
@@ -88,15 +95,15 @@ export async function createTask(
     }
 
     const defaultRoot = join(dirname(repo.root), ".agent-workspaces", basename(repo.root));
-    const root = resolve(repo.root, options.worktreeRoot ?? defaultRoot);
-    const worktree = join(root, id);
+    const requestedRoot = resolve(repo.root, options.worktreeRoot ?? defaultRoot);
+    const worktree = await canonicalizePotential(join(requestedRoot, id));
     if (isPathWithin(repo.root, worktree)) {
       throw new Error(`worktree must be outside the main worktree: ${worktree}`);
     }
     if (await pathExists(worktree)) {
       throw new Error(`worktree path already exists: ${worktree}`);
     }
-    await mkdir(root, { recursive: true });
+    await mkdir(dirname(worktree), { recursive: true });
 
     const state: TaskState = {
       version: 1,
@@ -385,6 +392,27 @@ async function rollbackIntegration(
     `integration check failed; HEAD restored to ${before}: ${errorMessage(reason)}` +
       (leftovers ? `\nuntracked or generated files remain:\n${leftovers}` : ""),
   );
+}
+
+async function canonicalizePotential(input: string): Promise<string> {
+  let cursor = resolve(input);
+  const missing: string[] = [];
+  while (true) {
+    try {
+      const existing = await realpath(cursor);
+      return resolve(existing, ...missing.reverse());
+    } catch (error) {
+      if (!isFileCode(error, "ENOENT")) throw error;
+      const parent = dirname(cursor);
+      if (parent === cursor) throw error;
+      missing.push(basename(cursor));
+      cursor = parent;
+    }
+  }
+}
+
+function isFileCode(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
 function isPathWithin(parent: string, child: string): boolean {
