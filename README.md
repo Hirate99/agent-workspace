@@ -29,6 +29,17 @@ bun link
 
 The Skill is self-contained at `.agents/skills/orchestrate-agent-workspaces`.
 
+## Install the Codex Skill
+
+Ask Codex to install the Skill from this public GitHub path:
+
+```text
+Use $skill-installer to install the skill from
+https://github.com/Hirate99/agent-workspace/tree/main/.agents/skills/orchestrate-agent-workspaces
+```
+
+The installed Skill is named `$orchestrate-agent-workspaces`. Restart Codex if it does not appear immediately.
+
 ## Workflow
 
 ```sh
