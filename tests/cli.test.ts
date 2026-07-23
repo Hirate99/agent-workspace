@@ -9,7 +9,7 @@ test("CLI emits a durable task record as JSON", async () => {
   const fixture = await createFixture();
   const cli = resolve(
     import.meta.dir,
-    "../skills/orchestrate-agent-workspaces/scripts/cli.js",
+    "../skills/orchestrate-agent-workspaces/scripts/agent-workspace.js",
   );
   const create = Bun.spawn(
     ["node", cli, "create", "CLI1", "--repo", fixture.repo, "--root", fixture.worktrees, "--scope", "."],

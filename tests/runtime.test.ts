@@ -19,7 +19,7 @@ import { cleanupFixtures, createFixture, exists } from "./helpers.ts";
 
 afterEach(cleanupFixtures);
 
-const cli = resolve(import.meta.dir, "../skills/orchestrate-agent-workspaces/scripts/cli.js");
+const cli = resolve(import.meta.dir, "../skills/orchestrate-agent-workspaces/scripts/agent-workspace.js");
 
 interface CliResult {
   exitCode: number;

@@ -14,7 +14,7 @@ interface CliResult {
 
 const cli = resolve(
   import.meta.dir,
-  "../skills/orchestrate-agent-workspaces/scripts/cli.js",
+  "../skills/orchestrate-agent-workspaces/scripts/agent-workspace.js",
 );
 
 async function runCli(args: string[]): Promise<CliResult> {

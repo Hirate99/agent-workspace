@@ -88,8 +88,7 @@ try {
     "README.md",
     "skills/orchestrate-agent-workspaces/SKILL.md",
     "skills/orchestrate-agent-workspaces/agents/openai.yaml",
-    "skills/orchestrate-agent-workspaces/scripts/cli.js",
-    "skills/orchestrate-agent-workspaces/scripts/workspace.js",
+    "skills/orchestrate-agent-workspaces/scripts/agent-workspace.js",
     "bin/agent-workspace.js",
   ];
   for (const path of required) {
