@@ -1,8 +1,37 @@
 # agent-workspace
 
-A small transaction layer for parallel coding agents: one Git worktree per writer, durable task metadata, scope checks, and a single serialized integration path.
+A small transaction layer for coding agents: one Git worktree per writer, durable task metadata, scope checks, and a single serialized integration path.
 
-It deliberately does not provide a daemon, distributed locks, containers, or semantic merge automation. The included Codex Skill plans the work; the Node.js CLI enforces the local isolation primitive.
+This repository is both:
+
+- an [Agent Skill](https://agentskills.io/) under `.agents/skills/orchestrate-agent-workspaces/`;
+- a zero-runtime-dependency Node.js CLI published as `@mskyurina/agent-workspace`.
+
+It deliberately does not provide a daemon, distributed locks, containers, or semantic merge automation. The Skill plans the work; the CLI enforces the local Git isolation primitive.
+
+## Quick install
+
+Install the Skill globally for Codex with the open-source [Vercel Skills CLI](https://github.com/vercel-labs/skills):
+
+```sh
+npx skills add Hirate99/agent-workspace -g -a codex -y
+```
+
+Install the transaction CLI:
+
+```sh
+npm install --global @mskyurina/agent-workspace
+```
+
+The two commands install different pieces: `npx skills` puts the instructions and bundled scripts where Codex can discover them, while `npm install` exposes the `agent-workspace` command on your PATH. The Skill can run its bundled CLI without a global CLI installation.
+
+For a one-off CLI invocation without global installation:
+
+```sh
+npx --yes @mskyurina/agent-workspace --help
+```
+
+We intentionally do not mutate agent directories from npm `postinstall`. Skill installation remains an explicit, reviewable operation, and `npx skills` also handles updates, removal, project/global scope, and other supported agents.
 
 ## Requirements
 
@@ -10,36 +39,22 @@ It deliberately does not provide a daemon, distributed locks, containers, or sem
 - Node.js 18 or newer
 - A repository with at least one commit
 
-## Install the CLI
+Bun is only required for contributing and running this repository's test suite.
 
-```sh
-npm install --global @mskyurina/agent-workspace
-```
-
-Node.js 18+ and Git are required at runtime. The CLI has no runtime package dependencies.
-
-To develop from source:
-
-```sh
-git clone https://github.com/Hirate99/agent-workspace.git
-cd agent-workspace
-bun install
-npm run build
-npm link
-```
-
-The Skill is self-contained at `.agents/skills/orchestrate-agent-workspaces`.
-
-## Install the Codex Skill
-
-Ask Codex to install the Skill from this public GitHub path:
+## Repository layout
 
 ```text
-Use $skill-installer to install the skill from
-https://github.com/Hirate99/agent-workspace/tree/main/.agents/skills/orchestrate-agent-workspaces
+.agents/skills/
+  orchestrate-agent-workspaces/
+    SKILL.md      Agent instructions and trigger metadata
+    agents/       Codex UI metadata
+    scripts/      TypeScript CLI source
+    dist/         compiled, dependency-free CLI bundled with the Skill
+bin/              npm executable launcher
+tests/            unit, integration, real-world, and package tests
 ```
 
-The installed Skill is named `$orchestrate-agent-workspaces`. Restart Codex if it does not appear immediately.
+The universal `.agents/skills/<name>/` layout lets `npx skills add Hirate99/agent-workspace` discover and copy only the self-contained Skill directory, not the npm project or its development dependencies.
 
 ## Workflow
 
@@ -79,9 +94,10 @@ This prevents physical workspace conflicts and catches declared scope violations
 
 ## Development
 
-Contributors also need Bun 1.3 or newer for the test suite.
-
 ```sh
+git clone https://github.com/Hirate99/agent-workspace.git
+cd agent-workspace
+bun install --frozen-lockfile
 npm run build
 bun run typecheck
 bun test
@@ -89,4 +105,4 @@ bun run test:coverage
 bun run test:package
 ```
 
-The end-to-end tests create disposable Git repositories and exercise real worktree, concurrent submission, serialized integration, commit conflicts, scope enforcement, rollback, and cleanup behavior. The package smoke test builds the actual npm tarball, checks its contents, installs it into a clean consumer project, and invokes the installed CLI with Node.js. Coverage fails below 90% for lines, functions, or statements. GitHub Actions runs the same gates on Windows and Ubuntu.
+The end-to-end tests create disposable Git repositories and exercise real worktree creation, concurrent submission, serialized integration, commit conflicts, scope enforcement, rollback, and cleanup. The package smoke test builds the actual npm tarball, checks its bundled Skill contents, installs it into a clean consumer project, and invokes the installed CLI with Node.js and no Bun. GitHub Actions runs the same gates on Windows and Ubuntu.
