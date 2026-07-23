@@ -46,9 +46,25 @@ node <skill-dir>/scripts/cli.js create T123 \
 
 Give the worker only:
 
-- the returned `worktree`, `branch`, `namespace`, and `port`;
+- the returned `worktree`, `branch`, `namespace`, `port`, and `runtimeDir`;
 - its allowed scopes and acceptance checks;
 - relevant dependency or contract decisions.
+
+Prepare dependencies once per worker before implementation or tests:
+
+```sh
+node <skill-dir>/scripts/cli.js prepare T123 --repo <repo>
+```
+
+`prepare` detects npm, pnpm, Yarn, or Bun from `packageManager` and lockfiles and performs a frozen install. If detection is not appropriate for the repository, pass an explicit command after `--` or commit `.agent-workspace.json` with a `prepare` argument array.
+
+Run worker tests, development servers, database setup, and other resource-using commands through the transaction runtime:
+
+```sh
+node <skill-dir>/scripts/cli.js exec T123 --repo <repo> -- npm test
+```
+
+Do not run those commands directly from the shared main checkout. `exec` fixes the worker `cwd` and injects its assigned `PORT`, isolated temporary directory, `COMPOSE_PROJECT_NAME`, and `AGENT_WORKSPACE_*` namespace hints. Use `env T123 --repo <repo>` to inspect the non-secret overrides. If the application ignores these variables or uses a fixed host port, database, Redis keyspace, container name, or build directory, declare mappings in `.agent-workspace.json` or mark that resource `--exclusive` and serialize it.
 
 Require the worker to run focused checks and commit all intended changes. Then submit:
 

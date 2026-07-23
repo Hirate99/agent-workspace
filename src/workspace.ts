@@ -1,4 +1,5 @@
 import { mkdir, realpath, stat } from "node:fs/promises";
+import { createServer } from "node:net";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { CommandError, git, runShell } from "./git.js";
 import {
@@ -8,7 +9,14 @@ import {
   unique,
   type TaskState,
 } from "./model.js";
-import { listTasks, loadTask, saveTask, withRepoLock } from "./store.js";
+import {
+  listTasks,
+  loadTask,
+  removeTaskRuntimeDir,
+  saveTask,
+  taskRuntimeDir,
+  withRepoLock,
+} from "./store.js";
 
 export interface RepoInfo {
   root: string;
@@ -113,8 +121,9 @@ export async function createTask(
       base,
       branch,
       worktree,
+      runtimeDir: taskRuntimeDir(repo.commonDir, id),
       namespace: id.toLowerCase().replaceAll("_", "-"),
-      port: allocatePort(repo.root, id, tasks),
+      port: await allocatePort(repo.root, id, tasks),
       scopes,
       exclusive,
       status: "active",
@@ -306,6 +315,7 @@ export async function cleanupTask(
       await git(repo.root, ["worktree", "prune"]);
     }
     await git(repo.root, ["branch", "-D", state.branch], { allowFailure: true });
+    await removeTaskRuntimeDir(repo.commonDir, id);
 
     const cleaned: TaskState = {
       ...state,
@@ -346,11 +356,25 @@ function normalizeResource(resource: string): string {
   return value;
 }
 
-function allocatePort(repo: string, id: string, tasks: TaskState[]): number {
+async function allocatePort(repo: string, id: string, tasks: TaskState[]): Promise<number> {
   const used = new Set(tasks.filter((task) => task.status !== "cleaned").map((task) => task.port));
   let port = 24000 + (fnv1a(`${repo}\0${id}`) % 10000);
-  while (used.has(port)) port = port === 33999 ? 24000 : port + 1;
-  return port;
+  for (let attempts = 0; attempts < 10_000; attempts += 1) {
+    if (!used.has(port) && (await portAvailable(port))) return port;
+    port = port === 33999 ? 24000 : port + 1;
+  }
+  throw new Error("no available task port in range 24000-33999");
+}
+
+function portAvailable(port: number): Promise<boolean> {
+  return new Promise((resolvePort) => {
+    const server = createServer();
+    server.unref();
+    server.once("error", () => resolvePort(false));
+    server.listen({ host: "127.0.0.1", port, exclusive: true }, () => {
+      server.close((error) => resolvePort(!error));
+    });
+  });
 }
 
 function fnv1a(value: string): number {

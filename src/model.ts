@@ -16,6 +16,7 @@ export interface TaskState {
   base: string;
   branch: string;
   worktree: string;
+  runtimeDir: string;
   namespace: string;
   port: number;
   scopes: string[];

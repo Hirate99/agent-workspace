@@ -1,9 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 export function storeDir(commonDir) {
     return join(commonDir, "agent-workspace");
+}
+export function taskRuntimeDir(commonDir, id) {
+    return join(storeDir(commonDir), "runtime", id);
 }
 function tasksDir(commonDir) {
     return join(storeDir(commonDir), "tasks");
@@ -41,6 +44,9 @@ export async function saveTask(state) {
     const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
     await writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`);
     await rename(temporary, target);
+}
+export async function removeTaskRuntimeDir(commonDir, id) {
+    await rm(taskRuntimeDir(commonDir, id), { recursive: true, force: true, maxRetries: 3 });
 }
 export async function withRepoLock(commonDir, name, action) {
     const directory = storeDir(commonDir);

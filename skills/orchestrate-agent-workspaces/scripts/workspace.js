@@ -1,8 +1,9 @@
 import { mkdir, realpath, stat } from "node:fs/promises";
+import { createServer } from "node:net";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { CommandError, git, runShell } from "./git.js";
 import { assertTaskId, isPathInScope, normalizeScope, unique, } from "./model.js";
-import { listTasks, loadTask, saveTask, withRepoLock } from "./store.js";
+import { listTasks, loadTask, removeTaskRuntimeDir, saveTask, taskRuntimeDir, withRepoLock, } from "./store.js";
 export async function getRepoInfo(input) {
     const cwd = resolve(input);
     const reportedRoot = resolve((await git(cwd, ["rev-parse", "--show-toplevel"])).stdout.trim());
@@ -55,8 +56,9 @@ export async function createTask(repoPath, id, options = {}) {
             base,
             branch,
             worktree,
+            runtimeDir: taskRuntimeDir(repo.commonDir, id),
             namespace: id.toLowerCase().replaceAll("_", "-"),
-            port: allocatePort(repo.root, id, tasks),
+            port: await allocatePort(repo.root, id, tasks),
             scopes,
             exclusive,
             status: "active",
@@ -208,6 +210,7 @@ export async function cleanupTask(repoPath, id, options = {}) {
             await git(repo.root, ["worktree", "prune"]);
         }
         await git(repo.root, ["branch", "-D", state.branch], { allowFailure: true });
+        await removeTaskRuntimeDir(repo.commonDir, id);
         const cleaned = {
             ...state,
             status: "cleaned",
@@ -243,12 +246,25 @@ function normalizeResource(resource) {
     }
     return value;
 }
-function allocatePort(repo, id, tasks) {
+async function allocatePort(repo, id, tasks) {
     const used = new Set(tasks.filter((task) => task.status !== "cleaned").map((task) => task.port));
     let port = 24000 + (fnv1a(`${repo}\0${id}`) % 10000);
-    while (used.has(port))
+    for (let attempts = 0; attempts < 10_000; attempts += 1) {
+        if (!used.has(port) && (await portAvailable(port)))
+            return port;
         port = port === 33999 ? 24000 : port + 1;
-    return port;
+    }
+    throw new Error("no available task port in range 24000-33999");
+}
+function portAvailable(port) {
+    return new Promise((resolvePort) => {
+        const server = createServer();
+        server.unref();
+        server.once("error", () => resolvePort(false));
+        server.listen({ host: "127.0.0.1", port, exclusive: true }, () => {
+            server.close((error) => resolvePort(!error));
+        });
+    });
 }
 function fnv1a(value) {
     let hash = 0x811c9dc5;

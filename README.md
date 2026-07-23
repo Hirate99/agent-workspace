@@ -66,6 +66,12 @@ agent-workspace create T123 \
   --scope src/payments \
   --exclusive api-schema
 
+# Reproducibly install dependencies in the returned worktree.
+agent-workspace prepare T123 --repo /path/to/repo
+
+# Run tests or services with the task runtime namespace.
+agent-workspace exec T123 --repo /path/to/repo -- npm test
+
 # Work and commit inside the returned worktree, then submit it.
 agent-workspace submit T123 --repo /path/to/worker
 
@@ -79,7 +85,34 @@ agent-workspace integrate T123 \
 agent-workspace cleanup T123 --repo /path/to/repo
 ```
 
-Every command emits JSON. Run `agent-workspace --help` for all options.
+State commands emit JSON. `prepare` and `exec` attach to the child process and preserve its exit code. Run `agent-workspace --help` for all options.
+
+## Lightweight runtime isolation
+
+Each task receives a unique, durable runtime profile in addition to its worktree:
+
+- `PORT` and `AGENT_WORKSPACE_PORT` use the task port. Creation skips ports that are already bound.
+- `TEMP`, `TMP`, and `TMPDIR` point to `<git-common-dir>/agent-workspace/runtime/<task>/tmp`.
+- `COMPOSE_PROJECT_NAME` keeps normal Compose networks, volumes, and containers task-specific.
+- `AGENT_WORKSPACE_DB_NAMESPACE` and `AGENT_WORKSPACE_REDIS_PREFIX` provide safe names for application-level database and Redis isolation.
+- `AGENT_WORKSPACE_ID`, `AGENT_WORKSPACE_NAMESPACE`, `AGENT_WORKSPACE_WORKTREE`, and `AGENT_WORKSPACE_RUNTIME_DIR` are available to scripts.
+
+`prepare` selects a frozen install from `packageManager` or an unambiguous `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, or `bun.lockb`. Override it for other ecosystems with `prepare T123 -- <command>`, or commit a small project configuration:
+
+```json
+{
+  "prepare": ["npm", "ci"],
+  "env": {
+    "DATABASE_SCHEMA": "${dbNamespace}",
+    "REDIS_KEY_PREFIX": "${redisPrefix}",
+    "APP_URL": "http://127.0.0.1:${port}"
+  }
+}
+```
+
+Supported templates are `${id}`, `${namespace}`, `${port}`, `${worktree}`, `${runtimeDir}`, `${tempDir}`, `${dbNamespace}`, `${redisPrefix}`, and `${composeProject}`. Reserved `AGENT_WORKSPACE_*` variables cannot be overridden.
+
+This is namespace isolation, not virtualization. A port can still be claimed after its availability check, and an application with hard-coded ports, database names, Redis keys, Compose `container_name`, or shared build output must be configured to consume the profile. If it cannot be configured, declare the resource `--exclusive` and run those tasks serially. The CLI does not provision or destroy external databases or Redis instances.
 
 ## Safety model
 
@@ -105,4 +138,4 @@ bun run test:coverage
 bun run test:package
 ```
 
-The end-to-end tests create disposable Git repositories and exercise real worktree creation, concurrent submission, serialized integration, commit conflicts, scope enforcement, rollback, and cleanup. The package smoke test builds the actual npm tarball, checks its bundled Skill contents, installs it into a clean consumer project, and invokes the installed CLI with Node.js and no Bun. GitHub Actions runs the same gates on Windows and Ubuntu.
+The end-to-end tests create disposable Git repositories and exercise real worktrees, concurrent TCP services, npm preparation without Bun, per-task temporary directories and namespaces, occupied ports, child exit codes, concurrent submission, serialized integration, commit conflicts, scope enforcement, rollback, and cleanup behavior. The package smoke test builds the actual npm tarball, checks its bundled Skill contents, installs it into a clean consumer project, and invokes the installed CLI with Node.js and no Bun. Coverage fails below 90% for lines, functions, or statements. GitHub Actions runs the same gates on Windows and Ubuntu.

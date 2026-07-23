@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { executeTaskCommand, prepareTask, taskEnvironment } from "./runtime.js";
 import { cleanupTask, createTask, integrateTask, submitTask, taskStatus, } from "./workspace.js";
 const HELP = `agent-workspace <command> [task] [options]
 
 Commands:
   create <task>     Create an isolated branch and worktree
+  prepare <task>    Install dependencies reproducibly in its worktree
+  env <task>        Show its isolated runtime environment
+  exec <task>       Run a command in its worktree after --
   submit <task>     Validate and record a worker result
   integrate <task>  Serialize cherry-pick and optional checks
   cleanup <task>    Remove an integrated worker transaction
@@ -26,11 +30,17 @@ Integrate options:
 Cleanup options:
   --force             Discard a non-integrated or dirty task intentionally
 
-All successful commands except --help print JSON.`;
+Runtime examples:
+  agent-workspace prepare T123 --repo <repo>
+  agent-workspace exec T123 --repo <repo> -- npm test
+
+State commands print JSON. prepare and exec attach directly to the child process.`;
 const valueFlags = new Set(["repo", "base", "root", "scope", "exclusive", "check"]);
 const booleanFlags = new Set(["force", "help"]);
 export async function main(argv) {
-    const parsed = parseArgs(argv);
+    const separator = argv.indexOf("--");
+    const commandArgs = separator === -1 ? [] : argv.slice(separator + 1);
+    const parsed = parseArgs(separator === -1 ? argv : argv.slice(0, separator));
     if (parsed.booleans.has("help") || parsed.positionals.length === 0) {
         console.log(HELP);
         return;
@@ -38,6 +48,9 @@ export async function main(argv) {
     const [command, id, ...extra] = parsed.positionals;
     if (extra.length > 0)
         throw new Error(`unexpected arguments: ${extra.join(" ")}`);
+    if (commandArgs.length > 0 && command !== "prepare" && command !== "exec") {
+        throw new Error(`command arguments after -- are not valid for ${command}`);
+    }
     const repo = one(parsed, "repo") ?? process.cwd();
     let result;
     switch (command) {
@@ -50,6 +63,24 @@ export async function main(argv) {
                 exclusive: many(parsed, "exclusive"),
             });
             break;
+        case "env":
+            assertAllowed(parsed, ["repo"]);
+            result = await taskEnvironment(repo, requireId(id, command));
+            break;
+        case "prepare": {
+            assertAllowed(parsed, ["repo"]);
+            const prepared = await prepareTask(repo, requireId(id, command), commandArgs);
+            process.exitCode = prepared.exitCode;
+            return;
+        }
+        case "exec": {
+            assertAllowed(parsed, ["repo"]);
+            if (commandArgs.length === 0)
+                throw new Error("exec requires a command after --");
+            const executed = await executeTaskCommand(repo, requireId(id, command), commandArgs);
+            process.exitCode = executed.exitCode;
+            return;
+        }
         case "submit":
             assertAllowed(parsed, ["repo"]);
             result = await submitTask(repo, requireId(id, command));
