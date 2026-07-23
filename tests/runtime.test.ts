@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createServer } from "node:net";
 import { mkdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { git } from "../src/git.ts";
 import {
@@ -65,6 +65,9 @@ describe("runtime profiles", () => {
     ]);
     expect(firstProfile.port).not.toBe(secondProfile.port);
     expect(firstProfile.runtimeDir).not.toBe(secondProfile.runtimeDir);
+    expect(firstProfile.tempDir).not.toBe(secondProfile.tempDir);
+    expect(isPathWithin(fixture.repo, firstProfile.tempDir)).toBe(false);
+    expect(isPathWithin(fixture.repo, secondProfile.tempDir)).toBe(false);
     const publicEnv = await runCli(["env", first.id, "--repo", fixture.repo]);
     expect(publicEnv.exitCode, publicEnv.stderr).toBe(0);
     expect(JSON.parse(publicEnv.stdout).environment.PORT).toBe(String(first.port));
@@ -82,6 +85,44 @@ describe("runtime profiles", () => {
     await cleanupTask(fixture.repo, second.id, { force: true });
     expect(await exists(firstProfile.runtimeDir)).toBe(false);
     expect(await exists(secondProfile.runtimeDir)).toBe(false);
+    expect(await exists(firstProfile.tempDir)).toBe(false);
+    expect(await exists(secondProfile.tempDir)).toBe(false);
+  });
+
+  test("escapes inherited repository-local temp roots and cleans them deterministically", async () => {
+    const fixture = await createFixture();
+    await Bun.write(join(fixture.repo, "package.json"), '{"name":"host-root","private":true}\n');
+    await git(fixture.repo, ["add", "package.json"]);
+    await git(fixture.repo, ["commit", "-m", "add host package"]);
+    const task = await createTask(fixture.repo, "unsafe_host_temp", {
+      worktreeRoot: fixture.worktrees,
+    });
+    const unsafeTemp = join(fixture.repo, ".git", "agent-workspace", "runtime", "host", "tmp");
+    await mkdir(unsafeTemp, { recursive: true });
+    const original = {
+      TEMP: process.env.TEMP,
+      TMP: process.env.TMP,
+      TMPDIR: process.env.TMPDIR,
+    };
+    const profile = await (async () => {
+      try {
+        process.env.TEMP = unsafeTemp;
+        process.env.TMP = unsafeTemp;
+        process.env.TMPDIR = unsafeTemp;
+        return await taskEnvironment(fixture.repo, task.id);
+      } finally {
+        restoreEnvironment("TEMP", original.TEMP);
+        restoreEnvironment("TMP", original.TMP);
+        restoreEnvironment("TMPDIR", original.TMPDIR);
+      }
+    })();
+
+    expect(isPathWithin(fixture.repo, profile.tempDir)).toBe(false);
+    const consumer = join(profile.tempDir, "consumer");
+    await mkdir(consumer);
+    expect(await findPackageRoot(consumer)).not.toBe(fixture.repo);
+    await cleanupTask(fixture.repo, task.id, { force: true });
+    expect(await exists(profile.tempDir)).toBe(false);
   });
 
   test("rejects reserved config variables and unknown templates", async () => {
@@ -186,8 +227,20 @@ server.listen(port, "127.0.0.1", () => {
     expect(secondRun.exitCode, secondRun.stderr).toBe(0);
     const firstReady = await Bun.file(join(first.runtimeDir, "ready.json")).json();
     const secondReady = await Bun.file(join(second.runtimeDir, "ready.json")).json();
-    expect(firstReady).toEqual({ port: first.port, cwd: first.worktree, temp: join(first.runtimeDir, "tmp") });
-    expect(secondReady).toEqual({ port: second.port, cwd: second.worktree, temp: join(second.runtimeDir, "tmp") });
+    const [firstProfile, secondProfile] = await Promise.all([
+      taskEnvironment(fixture.repo, first.id),
+      taskEnvironment(fixture.repo, second.id),
+    ]);
+    expect(firstReady).toEqual({
+      port: first.port,
+      cwd: first.worktree,
+      temp: firstProfile.tempDir,
+    });
+    expect(secondReady).toEqual({
+      port: second.port,
+      cwd: second.worktree,
+      temp: secondProfile.tempDir,
+    });
 
     await cleanupTask(fixture.repo, first.id, { force: true });
     await cleanupTask(fixture.repo, second.id, { force: true });
@@ -297,6 +350,26 @@ test("detects frozen install commands and rejects ambiguous lockfiles", async ()
   await Bun.write(join(root, "package.json"), JSON.stringify({ packageManager: "cargo@1" }));
   await expect(detectPrepareCommand(root)).rejects.toThrow("unsupported packageManager");
 });
+
+function isPathWithin(parent: string, candidate: string): boolean {
+  const path = relative(resolve(parent), resolve(candidate));
+  return path === "" || (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path));
+}
+
+async function findPackageRoot(start: string): Promise<string | null> {
+  let current = resolve(start);
+  while (true) {
+    if (await exists(join(current, "package.json"))) return current;
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+function restoreEnvironment(name: "TEMP" | "TMP" | "TMPDIR", value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
 
 function fnv1a(value: string): number {
   let hash = 0x811c9dc5;

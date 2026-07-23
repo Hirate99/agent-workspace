@@ -4,7 +4,7 @@ import { access, mkdir, readFile } from "node:fs/promises";
 import { delimiter, extname, isAbsolute, join, resolve } from "node:path";
 
 import { assertTaskId, type TaskState } from "./model.js";
-import { loadTask, taskRuntimeDir } from "./store.js";
+import { loadTask, taskRuntimeDir, taskTempDir } from "./store.js";
 import { getRepoInfo } from "./workspace.js";
 
 const CONFIG_NAME = ".agent-workspace.json";
@@ -39,8 +39,11 @@ interface RuntimeConfig {
 export async function taskEnvironment(repoPath: string, id: string): Promise<RuntimeProfile> {
   const task = await resolveTask(repoPath, id, false);
   const runtimeDir = taskRuntimeDir(task.commonDir, task.id);
-  const tempDir = join(runtimeDir, "tmp");
-  await mkdir(tempDir, { recursive: true });
+  const tempDir = taskTempDir(task.commonDir, task.id);
+  await Promise.all([
+    mkdir(runtimeDir, { recursive: true }),
+    mkdir(tempDir, { recursive: true }),
+  ]);
   const dbNamespace = portableDbNamespace(task.namespace);
   const redisPrefix = `aw:${task.namespace}:`;
   const composeProject = `aw-${task.namespace}`;

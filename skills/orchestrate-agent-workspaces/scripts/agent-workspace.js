@@ -7,9 +7,9 @@ import { fileURLToPath } from "node:url";
 
 // src/runtime.ts
 import { spawn as spawn2 } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash as createHash2 } from "node:crypto";
 import { access, mkdir as mkdir3, readFile as readFile2 } from "node:fs/promises";
-import { delimiter, extname, isAbsolute as isAbsolute2, join as join3, resolve as resolve2 } from "node:path";
+import { delimiter, extname, isAbsolute as isAbsolute2, join as join3, resolve as resolve3 } from "node:path";
 
 // src/model.ts
 import { posix } from "node:path";
@@ -36,15 +36,21 @@ function unique(values) {
 }
 
 // src/store.ts
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, open, readFile, readdir, rename, rm, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 function storeDir(commonDir) {
   return join(commonDir, "agent-workspace");
 }
 function taskRuntimeDir(commonDir, id) {
   return join(storeDir(commonDir), "runtime", id);
+}
+function taskTempDir(commonDir, id) {
+  const canonicalCommonDir = process.platform === "win32" ? resolve(commonDir).toLowerCase() : resolve(commonDir);
+  const repoKey = createHash("sha256").update(canonicalCommonDir).digest("hex").slice(0, 12);
+  return join(systemTempDir(), "agent-workspace", repoKey, id);
 }
 function tasksDir(commonDir) {
   return join(storeDir(commonDir), "tasks");
@@ -83,6 +89,13 @@ async function saveTask(state) {
 async function removeTaskRuntimeDir(commonDir, id) {
   await rm(taskRuntimeDir(commonDir, id), { recursive: true, force: true, maxRetries: 3 });
 }
+async function removeTaskTempDir(commonDir, id) {
+  await rm(taskTempDir(commonDir, id), {
+    recursive: true,
+    force: true,
+    maxRetries: 3
+  });
+}
 async function withRepoLock(commonDir, name, action) {
   const directory = storeDir(commonDir);
   await mkdir(directory, { recursive: true });
@@ -116,11 +129,17 @@ async function withRepoLock(commonDir, name, action) {
 function isCode(error, code) {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
+function systemTempDir() {
+  if (process.platform !== "win32")
+    return "/tmp";
+  const localAppData = process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local");
+  return join(localAppData, "Temp");
+}
 
 // src/workspace.ts
 import { mkdir as mkdir2, realpath, stat } from "node:fs/promises";
 import { createServer } from "node:net";
-import { basename, dirname, isAbsolute, join as join2, normalize, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join as join2, normalize, relative, resolve as resolve2, sep } from "node:path";
 
 // src/git.ts
 import { spawn } from "node:child_process";
@@ -154,9 +173,9 @@ async function run(command, cwd, options = {}) {
   child.stderr.on("data", (chunk) => {
     stderrText += chunk;
   });
-  const exitCode = await new Promise((resolve, reject) => {
+  const exitCode = await new Promise((resolve2, reject) => {
     child.once("error", reject);
-    child.once("close", (code) => resolve(code ?? 1));
+    child.once("close", (code) => resolve2(code ?? 1));
   });
   const result = { command, cwd, exitCode, stdout: stdoutText, stderr: stderrText };
   if (exitCode !== 0 && !options.allowFailure) {
@@ -177,13 +196,13 @@ function runShell(command, cwd) {
 
 // src/workspace.ts
 async function getRepoInfo(input) {
-  const cwd = resolve(input);
-  const reportedRoot = resolve((await git(cwd, ["rev-parse", "--show-toplevel"])).stdout.trim());
+  const cwd = resolve2(input);
+  const reportedRoot = resolve2((await git(cwd, ["rev-parse", "--show-toplevel"])).stdout.trim());
   const root = await realpath(reportedRoot);
   const gitDirValue = (await git(reportedRoot, ["rev-parse", "--git-dir"])).stdout.trim();
   const commonDirValue = (await git(reportedRoot, ["rev-parse", "--git-common-dir"])).stdout.trim();
-  const gitDir = await realpath(isAbsolute(gitDirValue) ? normalize(gitDirValue) : resolve(reportedRoot, gitDirValue));
-  const commonDir = await realpath(isAbsolute(commonDirValue) ? normalize(commonDirValue) : resolve(reportedRoot, commonDirValue));
+  const gitDir = await realpath(isAbsolute(gitDirValue) ? normalize(gitDirValue) : resolve2(reportedRoot, gitDirValue));
+  const commonDir = await realpath(isAbsolute(commonDirValue) ? normalize(commonDirValue) : resolve2(reportedRoot, commonDirValue));
   return { root, gitDir, commonDir, isMain: samePath(gitDir, commonDir) };
 }
 async function createTask(repoPath, id, options = {}) {
@@ -210,7 +229,7 @@ async function createTask(repoPath, id, options = {}) {
       throw new Error(`branch already exists: ${branch}`);
     }
     const defaultRoot = join2(dirname(repo.root), ".agent-workspaces", basename(repo.root));
-    const requestedRoot = resolve(repo.root, options.worktreeRoot ?? defaultRoot);
+    const requestedRoot = resolve2(repo.root, options.worktreeRoot ?? defaultRoot);
     const worktree = await canonicalizePotential(join2(requestedRoot, id));
     if (isPathWithin(repo.root, worktree)) {
       throw new Error(`worktree must be outside the main worktree: ${worktree}`);
@@ -375,6 +394,7 @@ async function cleanupTask(repoPath, id, options = {}) {
     }
     await git(repo.root, ["branch", "-D", state.branch], { allowFailure: true });
     await removeTaskRuntimeDir(repo.commonDir, id);
+    await removeTaskTempDir(state.commonDir, id);
     const cleaned = {
       ...state,
       status: "cleaned",
@@ -460,12 +480,12 @@ untracked or generated files remain:
 ${leftovers}` : ""));
 }
 async function canonicalizePotential(input) {
-  let cursor = resolve(input);
+  let cursor = resolve2(input);
   const missing = [];
   while (true) {
     try {
       const existing = await realpath(cursor);
-      return resolve(existing, ...missing.reverse());
+      return resolve2(existing, ...missing.reverse());
     } catch (error) {
       if (!isFileCode(error, "ENOENT"))
         throw error;
@@ -497,8 +517,11 @@ var CONFIG_NAME = ".agent-workspace.json";
 async function taskEnvironment(repoPath, id) {
   const task = await resolveTask(repoPath, id, false);
   const runtimeDir = taskRuntimeDir(task.commonDir, task.id);
-  const tempDir = join3(runtimeDir, "tmp");
-  await mkdir3(tempDir, { recursive: true });
+  const tempDir = taskTempDir(task.commonDir, task.id);
+  await Promise.all([
+    mkdir3(runtimeDir, { recursive: true }),
+    mkdir3(tempDir, { recursive: true })
+  ]);
   const dbNamespace = portableDbNamespace(task.namespace);
   const redisPrefix = `aw:${task.namespace}:`;
   const composeProject = `aw-${task.namespace}`;
@@ -595,7 +618,7 @@ async function resolveWindowsCommand(command, cwd, environment) {
   const extensions = extname(command) ? [""] : pathExt;
   const directories = explicitPath ? [""] : pathValue.split(delimiter).filter(Boolean);
   for (const directory of directories) {
-    const base = explicitPath ? isAbsolute2(command) ? command : resolve2(cwd, command) : join3(directory, command);
+    const base = explicitPath ? isAbsolute2(command) ? command : resolve3(cwd, command) : join3(directory, command);
     for (const extension of extensions) {
       const candidate = `${base}${extension}`;
       if (await exists(candidate))
@@ -729,7 +752,7 @@ function portableDbNamespace(namespace) {
   const base = `aw_${namespace.replace(/[^a-z0-9_]/g, "_")}`;
   if (base.length <= 63)
     return base;
-  const hash = createHash("sha256").update(base).digest("hex").slice(0, 8);
+  const hash = createHash2("sha256").update(base).digest("hex").slice(0, 8);
   return `${base.slice(0, 54)}_${hash}`;
 }
 function expandTemplate(value, variables, name) {
