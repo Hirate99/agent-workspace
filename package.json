@@ -11,6 +11,7 @@
     "test:coverage": "bun test --coverage --coverage-reporter=text --timeout 30000",
     "typecheck": "tsc --noEmit",
     "test:package": "bun tests/package-smoke.ts",
+    "release:prepare": "node scripts/release.mjs prepare",
     "build": "bun -e \"const r=await Bun.build({entrypoints:['src/cli.ts'],outdir:'skills/orchestrate-agent-workspaces/scripts',naming:'agent-workspace.js',target:'node',format:'esm',banner:'// Generated from src/cli.ts. Do not edit directly.'});if(!r.success){for(const log of r.logs)console.error(log);process.exit(1)}\"",
     "prepack": "npm run build",
     "test:node": "npm run build && node skills/orchestrate-agent-workspaces/scripts/agent-workspace.js --help"
