@@ -1,7 +1,7 @@
 interface:
   display_name: "Agent Workspaces"
   short_description: "Create isolated branches and agent worktrees"
-  default_prompt: "Use $orchestrate-agent-workspaces to start this coding task in an isolated worktree and integrate it safely."
+  default_prompt: "Use $orchestrate-agent-workspaces to do this coding task in an isolated worktree, and keep it on the task branch unless I explicitly ask to integrate it."
 
 policy:
   allow_implicit_invocation: true
