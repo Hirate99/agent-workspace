@@ -1,6 +1,6 @@
 ---
 name: orchestrate-agent-workspaces
-description: Create isolated Git worktree transactions for coding tasks. Use when Codex is asked to start implementation on a new branch or workspace, isolate writes from the current checkout, coordinate one or more writing agents, prevent shared-workspace conflicts, allocate scopes or exclusive resources, collect worker commits, or serialize integration and validation. Do not use for read-only research, review, or explanation.
+description: Create isolated Git worktree transactions for AI coding agents and agent orchestrators. Use when an agent needs to implement changes in an isolated branch or workspace, coordinate concurrent writers, prevent shared-workspace conflicts, allocate scopes or exclusive resources, collect worker commits, or serialize integration and validation. Do not use for read-only research, review, or explanation.
 ---
 
 # Orchestrate Agent Workspaces

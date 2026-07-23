@@ -7,15 +7,19 @@ This repository is both:
 - an [Agent Skill](https://agentskills.io/) under `skills/orchestrate-agent-workspaces/`;
 - a zero-runtime-dependency Node.js CLI published as `@mskyurina/agent-workspace`.
 
+The CLI and core Skill are host-agnostic: any coding agent, script, or CI pipeline can invoke the transaction workflow. Files under `agents/` provide optional host-specific metadata and are not required to run either layer.
+
 It deliberately does not provide a daemon, distributed locks, containers, or semantic merge automation. The Skill plans the work; the CLI enforces the local Git isolation primitive.
 
 ## Quick install
 
-Install the Skill globally for Codex with the open-source [Vercel Skills CLI](https://github.com/vercel-labs/skills):
+Install the Skill globally for your coding agent with the open-source [Vercel Skills CLI](https://github.com/vercel-labs/skills):
 
 ```sh
-npx skills add Hirate99/agent-workspace -g -a codex -y
+npx skills add Hirate99/agent-workspace -g
 ```
+
+The installer detects supported agents and lets you select the destinations. For non-interactive installation, add one or more `-a <agent-id>` options and `-y`.
 
 Install the transaction CLI:
 
@@ -23,7 +27,7 @@ Install the transaction CLI:
 npm install --global @mskyurina/agent-workspace
 ```
 
-The two commands install different pieces: `npx skills` puts the instructions and bundled scripts where Codex can discover them, while `npm install` exposes the `agent-workspace` command on your PATH. The Skill can run its bundled CLI without a global CLI installation.
+The two commands install different pieces: `npx skills` puts the instructions and bundled scripts where the selected agents can discover them, while `npm install` exposes the `agent-workspace` command on your PATH. The Skill can run its bundled CLI without a global CLI installation.
 
 For a one-off CLI invocation without global installation:
 
@@ -47,7 +51,7 @@ Bun is only required for contributing and running this repository's test suite.
 skills/
   orchestrate-agent-workspaces/
     SKILL.md      Agent instructions and trigger metadata
-    agents/       Codex UI metadata
+    agents/       optional host-specific UI metadata
     scripts/
       agent-workspace.js  generated, dependency-free CLI bundle
 src/              TypeScript CLI source

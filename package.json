@@ -38,7 +38,7 @@
     "agent",
     "git",
     "worktree",
-    "codex",
+    "agent-orchestration",
     "cli"
   ],
   "engines": {
