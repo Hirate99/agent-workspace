@@ -99,7 +99,7 @@ State commands emit JSON. `prepare` and `exec` attach to the child process and p
 Each task receives a unique, durable runtime profile in addition to its worktree:
 
 - `PORT` and `AGENT_WORKSPACE_PORT` use the task port. Creation skips ports that are already bound.
-- `TEMP`, `TMP`, and `TMPDIR` point to `<git-common-dir>/agent-workspace/runtime/<task>/tmp`.
+- `TEMP`, `TMP`, and `TMPDIR` point to an OS temporary path namespaced by repository and task, outside the repository tree.
 - `COMPOSE_PROJECT_NAME` keeps normal Compose networks, volumes, and containers task-specific.
 - `AGENT_WORKSPACE_DB_NAMESPACE` and `AGENT_WORKSPACE_REDIS_PREFIX` provide safe names for application-level database and Redis isolation.
 - `AGENT_WORKSPACE_ID`, `AGENT_WORKSPACE_NAMESPACE`, `AGENT_WORKSPACE_WORKTREE`, and `AGENT_WORKSPACE_RUNTIME_DIR` are available to scripts.

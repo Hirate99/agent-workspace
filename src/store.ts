@@ -1,6 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, open, readFile, readdir, rename, rm, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { TaskState } from "./model.js";
 
@@ -10,6 +11,13 @@ export function storeDir(commonDir: string): string {
 
 export function taskRuntimeDir(commonDir: string, id: string): string {
   return join(storeDir(commonDir), "runtime", id);
+}
+
+export function taskTempDir(commonDir: string, id: string): string {
+  const canonicalCommonDir =
+    process.platform === "win32" ? resolve(commonDir).toLowerCase() : resolve(commonDir);
+  const repoKey = createHash("sha256").update(canonicalCommonDir).digest("hex").slice(0, 12);
+  return join(systemTempDir(), "agent-workspace", repoKey, id);
 }
 
 function tasksDir(commonDir: string): string {
@@ -58,6 +66,14 @@ export async function removeTaskRuntimeDir(commonDir: string, id: string): Promi
   await rm(taskRuntimeDir(commonDir, id), { recursive: true, force: true, maxRetries: 3 });
 }
 
+export async function removeTaskTempDir(commonDir: string, id: string): Promise<void> {
+  await rm(taskTempDir(commonDir, id), {
+    recursive: true,
+    force: true,
+    maxRetries: 3,
+  });
+}
+
 export async function withRepoLock<T>(
   commonDir: string,
   name: "state" | "integration",
@@ -93,4 +109,10 @@ export async function withRepoLock<T>(
 
 function isCode(error: unknown, code: string): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
+}
+
+function systemTempDir(): string {
+  if (process.platform !== "win32") return "/tmp";
+  const localAppData = process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local");
+  return join(localAppData, "Temp");
 }

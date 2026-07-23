@@ -13,6 +13,7 @@ import {
   listTasks,
   loadTask,
   removeTaskRuntimeDir,
+  removeTaskTempDir,
   saveTask,
   taskRuntimeDir,
   withRepoLock,
@@ -316,6 +317,7 @@ export async function cleanupTask(
     }
     await git(repo.root, ["branch", "-D", state.branch], { allowFailure: true });
     await removeTaskRuntimeDir(repo.commonDir, id);
+    await removeTaskTempDir(state.commonDir, id);
 
     const cleaned: TaskState = {
       ...state,
