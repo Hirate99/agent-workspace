@@ -92,6 +92,16 @@ describe("runtime profiles", () => {
     await expect(taskEnvironment(fixture.repo, task.id)).rejects.toThrow("reserved variable");
     await Bun.write(config, JSON.stringify({ env: { APP_NAME: "${missing}" } }));
     await expect(taskEnvironment(fixture.repo, task.id)).rejects.toThrow("unknown template");
+    await Bun.write(config, "{");
+    await expect(taskEnvironment(fixture.repo, task.id)).rejects.toThrow("invalid JSON");
+    await Bun.write(config, "[]");
+    await expect(taskEnvironment(fixture.repo, task.id)).rejects.toThrow("must contain a JSON object");
+    await Bun.write(config, JSON.stringify({ prepare: [] }));
+    await expect(taskEnvironment(fixture.repo, task.id)).rejects.toThrow("prepare must be a non-empty array");
+    await Bun.write(config, JSON.stringify({ env: [] }));
+    await expect(taskEnvironment(fixture.repo, task.id)).rejects.toThrow("env must be an object");
+    await Bun.write(config, JSON.stringify({ env: { "INVALID-NAME": "value" } }));
+    await expect(taskEnvironment(fixture.repo, task.id)).rejects.toThrow("valid environment names");
     await cleanupTask(fixture.repo, task.id, { force: true });
   });
 
