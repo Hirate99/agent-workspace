@@ -132,6 +132,24 @@ This is namespace isolation, not virtualization. A port can still be claimed aft
 
 This prevents physical workspace conflicts and catches declared scope violations. It cannot prove that independently edited code is semantically compatible; repository-wide tests and contract checks remain the integration gate.
 
+## Releasing
+
+Prepare a stable version in the pull request:
+
+```sh
+npm run release:prepare -- patch
+```
+
+Use `minor`, `major`, or an explicit `x.y.z` version when appropriate. Commit the resulting `package.json` change with the rest of the pull request.
+
+After the pull request merges, the publish workflow examines the version on `main`. If that version already has a tag, the merge is not a release and the workflow exits successfully. For a new version it runs the complete release gates, creates an annotated tag named exactly `x.y.z`, publishes the npm package through trusted publishing, and creates a GitHub Release with generated notes.
+
+The workflow is restartable. If a failed run already created the tag at the merge commit, rerunning the same workflow continues with any missing npm publish or GitHub Release steps. To resume an older version explicitly:
+
+```sh
+gh workflow run publish.yml --ref main -f version=0.1.3
+```
+
 ## Development
 
 ```sh

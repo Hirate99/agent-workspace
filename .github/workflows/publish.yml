@@ -1,38 +1,116 @@
 name: Publish Package
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Stable x.y.z version to resume or publish"
+        required: true
+        type: string
+
+concurrency:
+  group: publish-main
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
+  inspect:
+    name: Inspect release version
+    runs-on: ubuntu-latest
+    outputs:
+      release_ref: ${{ steps.plan.outputs.release_ref }}
+      release_version: ${{ steps.plan.outputs.release_version }}
+      should_release: ${{ steps.plan.outputs.should_release }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Plan release
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          git fetch --force --tags origin
+          PACKAGE_VERSION="$(node --print "require('./package.json').version")"
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            RELEASE_VERSION="$REQUESTED_VERSION"
+            node scripts/release.mjs validate "$RELEASE_VERSION"
+            if git rev-parse --verify --quiet "refs/tags/${RELEASE_VERSION}^{commit}" >/dev/null; then
+              RELEASE_REF="$RELEASE_VERSION"
+              TAG_PACKAGE_FILE="$RUNNER_TEMP/tag-package.json"
+              git show "${RELEASE_VERSION}:package.json" > "$TAG_PACKAGE_FILE"
+              TAG_PACKAGE_VERSION="$(
+                TAG_PACKAGE_FILE="$TAG_PACKAGE_FILE" node --print \
+                  "JSON.parse(require('fs').readFileSync(process.env.TAG_PACKAGE_FILE, 'utf8')).version"
+              )"
+              if [ "$TAG_PACKAGE_VERSION" != "$RELEASE_VERSION" ]; then
+                echo "::error::Tag '$RELEASE_VERSION' contains package version '$TAG_PACKAGE_VERSION'."
+                exit 1
+              fi
+            else
+              node scripts/release.mjs check "$RELEASE_VERSION"
+              RELEASE_REF="$GITHUB_SHA"
+            fi
+            SHOULD_RELEASE=true
+          else
+            RELEASE_VERSION="$PACKAGE_VERSION"
+            node scripts/release.mjs check "$RELEASE_VERSION"
+            RELEASE_REF="$GITHUB_SHA"
+            SHOULD_RELEASE=true
+
+            if git rev-parse --verify --quiet "refs/tags/${RELEASE_VERSION}^{commit}" >/dev/null; then
+              TAG_SHA="$(git rev-parse "refs/tags/${RELEASE_VERSION}^{commit}")"
+              if [ "$TAG_SHA" = "$GITHUB_SHA" ]; then
+                RELEASE_REF="$RELEASE_VERSION"
+                echo "Tag $RELEASE_VERSION already points at this push; resuming release."
+              else
+                SHOULD_RELEASE=false
+                echo "Version $RELEASE_VERSION was already released at $TAG_SHA; nothing to do."
+              fi
+            fi
+          fi
+
+          echo "release_ref=$RELEASE_REF" >> "$GITHUB_OUTPUT"
+          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "should_release=$SHOULD_RELEASE" >> "$GITHUB_OUTPUT"
+
   publish:
-    name: Publish to npm
+    name: Tag, publish, and create release
+    needs: inspect
+    if: ${{ needs.inspect.outputs.should_release == 'true' }}
     runs-on: ubuntu-latest
     environment: npm
+    env:
+      RELEASE_VERSION: ${{ needs.inspect.outputs.release_version }}
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.inspect.outputs.release_ref }}
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - name: Verify release tag matches package version
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          PACKAGE_VERSION="$(node --print "require('./package.json').version")"
-          if [ "$RELEASE_TAG" != "$PACKAGE_VERSION" ]; then
-            echo "::error::Release tag '$RELEASE_TAG' does not match package version '$PACKAGE_VERSION'."
-            exit 1
-          fi
+      - name: Use npm with trusted publishing support
+        run: npm install --global npm@11.6.2
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -49,5 +127,49 @@ jobs:
         run: bun run test:coverage
       - name: Test npm package installation
         run: bun run test:package
+      - name: Create or verify release tag
+        run: |
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if git rev-parse --verify --quiet "refs/tags/${RELEASE_VERSION}^{commit}" >/dev/null; then
+            TAG_SHA="$(git rev-parse "refs/tags/${RELEASE_VERSION}^{commit}")"
+            if [ "$TAG_SHA" != "$HEAD_SHA" ]; then
+              echo "::error::Tag '$RELEASE_VERSION' points to $TAG_SHA instead of $HEAD_SHA."
+              exit 1
+            fi
+            echo "Tag $RELEASE_VERSION already exists at $HEAD_SHA."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$RELEASE_VERSION" -m "Release $RELEASE_VERSION"
+            git push origin "refs/tags/$RELEASE_VERSION"
+          fi
+      - name: Check npm publication
+        id: npm
+        env:
+          PACKAGE_NAME: "@mskyurina/agent-workspace"
+        run: |
+          if PUBLISHED_VERSION="$(npm view "${PACKAGE_NAME}@${RELEASE_VERSION}" version 2>/dev/null)"; then
+            if [ "$PUBLISHED_VERSION" != "$RELEASE_VERSION" ]; then
+              echo "::error::npm returned unexpected version '$PUBLISHED_VERSION'."
+              exit 1
+            fi
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "$PACKAGE_NAME@$RELEASE_VERSION is already published."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish package
+        if: ${{ steps.npm.outputs.published != 'true' }}
         run: npm publish --access public
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub Release $RELEASE_VERSION already exists."
+          else
+            gh release create "$RELEASE_VERSION" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --generate-notes \
+              --title "$RELEASE_VERSION"
