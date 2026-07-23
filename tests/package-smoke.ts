@@ -86,18 +86,17 @@ try {
   const required = [
     "package.json",
     "README.md",
-    ".agents/skills/orchestrate-agent-workspaces/SKILL.md",
-    ".agents/skills/orchestrate-agent-workspaces/scripts/cli.ts",
-    ".agents/skills/orchestrate-agent-workspaces/scripts/workspace.ts",
-    ".agents/skills/orchestrate-agent-workspaces/dist/cli.js",
-    ".agents/skills/orchestrate-agent-workspaces/dist/workspace.js",
+    "skills/orchestrate-agent-workspaces/SKILL.md",
+    "skills/orchestrate-agent-workspaces/agents/openai.yaml",
+    "skills/orchestrate-agent-workspaces/scripts/cli.js",
+    "skills/orchestrate-agent-workspaces/scripts/workspace.js",
     "bin/agent-workspace.js",
   ];
   for (const path of required) {
     if (!paths.has(path)) throw new Error("published package is missing " + path);
   }
 
-  const forbiddenPrefixes = [".github/", "tests/", "scripts/"];
+  const forbiddenPrefixes = [".github/", "tests/", "src/"];
   const leaked = [...paths].filter((path) =>
     forbiddenPrefixes.some((prefix) => path.startsWith(prefix)),
   );

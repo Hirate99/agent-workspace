@@ -6,14 +6,14 @@
     "agent-workspace": "bin/agent-workspace.js"
   },
   "scripts": {
-    "agent-workspace": "node .agents/skills/orchestrate-agent-workspaces/dist/cli.js",
+    "agent-workspace": "node skills/orchestrate-agent-workspaces/scripts/cli.js",
     "test": "bun test --timeout 20000",
     "test:coverage": "bun test --coverage --coverage-reporter=text --timeout 30000",
     "typecheck": "tsc --noEmit",
-    "test:package": "bun scripts/test-package.ts",
+    "test:package": "bun tests/package-smoke.ts",
     "build": "tsc -p tsconfig.build.json",
     "prepack": "npm run build",
-    "test:node": "npm run build && node .agents/skills/orchestrate-agent-workspaces/dist/cli.js --help"
+    "test:node": "npm run build && node skills/orchestrate-agent-workspaces/scripts/cli.js --help"
   },
   "devDependencies": {
     "@types/bun": "^1.3.1",
@@ -22,7 +22,7 @@
   },
   "description": "Transactional Git worktrees for isolated coding-agent changes and serialized integration.",
   "files": [
-    ".agents/skills/orchestrate-agent-workspaces/**",
+    "skills/orchestrate-agent-workspaces/**",
     "README.md",
     "bin/**"
   ],

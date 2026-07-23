@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { git } from "../.agents/skills/orchestrate-agent-workspaces/scripts/git.ts";
+import { git } from "../src/git.ts";
 
 export interface Fixture {
   root: string;

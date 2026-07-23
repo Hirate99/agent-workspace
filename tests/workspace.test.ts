@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { git } from "../.agents/skills/orchestrate-agent-workspaces/scripts/git.ts";
-import type { TaskState } from "../.agents/skills/orchestrate-agent-workspaces/scripts/model.ts";
+import { git } from "../src/git.ts";
+import type { TaskState } from "../src/model.ts";
 import {
   cleanupTask,
   createTask,
   integrateTask,
   submitTask,
   taskStatus,
-} from "../.agents/skills/orchestrate-agent-workspaces/scripts/workspace.ts";
+} from "../src/workspace.ts";
 import { cleanupFixtures, commitFile, createFixture, exists } from "./helpers.ts";
 
 afterEach(cleanupFixtures);

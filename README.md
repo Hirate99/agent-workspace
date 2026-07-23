@@ -4,7 +4,7 @@ A small transaction layer for coding agents: one Git worktree per writer, durabl
 
 This repository is both:
 
-- an [Agent Skill](https://agentskills.io/) under `.agents/skills/orchestrate-agent-workspaces/`;
+- an [Agent Skill](https://agentskills.io/) under `skills/orchestrate-agent-workspaces/`;
 - a zero-runtime-dependency Node.js CLI published as `@mskyurina/agent-workspace`.
 
 It deliberately does not provide a daemon, distributed locks, containers, or semantic merge automation. The Skill plans the work; the CLI enforces the local Git isolation primitive.
@@ -44,17 +44,17 @@ Bun is only required for contributing and running this repository's test suite.
 ## Repository layout
 
 ```text
-.agents/skills/
+skills/
   orchestrate-agent-workspaces/
     SKILL.md      Agent instructions and trigger metadata
     agents/       Codex UI metadata
-    scripts/      TypeScript CLI source
-    dist/         compiled, dependency-free CLI bundled with the Skill
+    scripts/      compiled, dependency-free CLI bundled with the Skill
+src/              TypeScript CLI source
 bin/              npm executable launcher
 tests/            unit, integration, real-world, and package tests
 ```
 
-The universal `.agents/skills/<name>/` layout lets `npx skills add Hirate99/agent-workspace` discover and copy only the self-contained Skill directory, not the npm project or its development dependencies.
+The standard `skills/<name>/` layout lets `npx skills add Hirate99/agent-workspace` discover the Skill with the same one-line command while copying only the self-contained Skill directory, not the npm project or its development dependencies.
 
 ## Workflow
 

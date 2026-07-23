@@ -33,7 +33,7 @@ jobs:
       - name: Build Node.js CLI
         run: npm run build
       - name: Verify compiled CLI is current
-        run: git diff --exit-code -- .agents/skills/orchestrate-agent-workspaces/dist
+        run: git diff --exit-code -- skills/orchestrate-agent-workspaces/scripts
       - name: Typecheck
         run: bun run typecheck
       - name: Test with coverage threshold

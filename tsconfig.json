@@ -10,7 +10,7 @@
     "types": ["bun"]
   },
   "include": [
-    ".agents/skills/orchestrate-agent-workspaces/scripts/**/*.ts",
+    "src/**/*.ts",
     "tests/**/*.ts"
   ]
 }

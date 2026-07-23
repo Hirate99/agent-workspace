@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { git } from "../.agents/skills/orchestrate-agent-workspaces/scripts/git.ts";
+import { git } from "../src/git.ts";
 import { cleanupFixtures, commitFile, createFixture, exists } from "./helpers.ts";
 
 afterEach(cleanupFixtures);
@@ -14,7 +14,7 @@ interface CliResult {
 
 const cli = resolve(
   import.meta.dir,
-  "../.agents/skills/orchestrate-agent-workspaces/dist/cli.js",
+  "../skills/orchestrate-agent-workspaces/scripts/cli.js",
 );
 
 async function runCli(args: string[]): Promise<CliResult> {

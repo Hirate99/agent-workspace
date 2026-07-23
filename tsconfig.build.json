@@ -6,11 +6,11 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "types": ["node"],
-    "rootDir": ".agents/skills/orchestrate-agent-workspaces/scripts",
-    "outDir": ".agents/skills/orchestrate-agent-workspaces/dist",
+    "rootDir": "src",
+    "outDir": "skills/orchestrate-agent-workspaces/scripts",
     "declaration": false,
     "sourceMap": false,
     "noEmit": false
   },
-  "include": [".agents/skills/orchestrate-agent-workspaces/scripts/**/*.ts"]
+  "include": ["src/**/*.ts"]
 }

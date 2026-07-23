@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { cleanupTask } from "../.agents/skills/orchestrate-agent-workspaces/scripts/workspace.ts";
+import { cleanupTask } from "../src/workspace.ts";
 import { cleanupFixtures, createFixture } from "./helpers.ts";
 
 afterEach(cleanupFixtures);
@@ -9,7 +9,7 @@ test("CLI emits a durable task record as JSON", async () => {
   const fixture = await createFixture();
   const cli = resolve(
     import.meta.dir,
-    "../.agents/skills/orchestrate-agent-workspaces/dist/cli.js",
+    "../skills/orchestrate-agent-workspaces/scripts/cli.js",
   );
   const create = Bun.spawn(
     ["node", cli, "create", "CLI1", "--repo", fixture.repo, "--root", fixture.worktrees, "--scope", "."],
