@@ -66,6 +66,15 @@ node <skill-dir>/scripts/agent-workspace.js exec T123 --repo <repo> -- npm test
 
 Do not run those commands directly from the shared main checkout. `exec` fixes the worker `cwd` and injects its assigned `PORT`, isolated temporary directory, `COMPOSE_PROJECT_NAME`, and `AGENT_WORKSPACE_*` namespace hints. Use `env T123 --repo <repo>` to inspect the non-secret overrides. If the application ignores these variables or uses a fixed host port, database, Redis keyspace, container name, or build directory, declare mappings in `.agent-workspace.json` or mark that resource `--exclusive` and serialize it.
 
+### Managed sandbox permissions
+
+The default worker root is a sibling of the repository, which can fall outside a managed sandbox's writable roots. In that case the CLI can report the correct worker `cwd` while a child tool is denied access. Bun may first print `EPERM` for the worktree or `tsconfig.json` and then misleadingly report `Script not found`.
+
+- Inspect `status` and use `exec <task> -- node -e "console.log(process.cwd())"` before diagnosing a `cwd` bug.
+- Treat an earlier `EPERM` or access-denied message as the primary failure.
+- Request the sandbox permission needed for `prepare` and `exec`, or create the task with `--root <approved-external-root>` where that root is writable.
+- Do not place the worker root inside the repository to evade the sandbox boundary; nested worktrees dirty the main checkout and are rejected.
+
 Require the worker to run focused checks and commit all intended changes. Then submit:
 
 ```sh
