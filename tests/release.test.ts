@@ -12,6 +12,7 @@ import {
 } from "../scripts/release.mjs";
 
 const releaseScript = resolve(import.meta.dir, "../scripts/release.mjs");
+const packageFile = resolve(import.meta.dir, "../package.json");
 const publishWorkflow = resolve(import.meta.dir, "../.github/workflows/publish.yml");
 
 describe("release version preparation", () => {
@@ -103,13 +104,18 @@ describe("release version preparation", () => {
   });
 
   test("exposes the version checks through the Node CLI", async () => {
-    const checked = Bun.spawnSync([process.execPath, releaseScript, "check", "0.1.2"], {
+    const packageVersion = JSON.parse(await readFile(packageFile, "utf8")).version;
+    if (typeof packageVersion !== "string") throw new Error("package version must be a string");
+    const nodeExecutable = Bun.which("node");
+    if (!nodeExecutable) throw new Error("Node.js executable was not found");
+
+    const checked = Bun.spawnSync([nodeExecutable, releaseScript, "check", packageVersion], {
       cwd: resolve(import.meta.dir, ".."),
       stdout: "pipe",
       stderr: "pipe",
     });
     expect(checked.exitCode, new TextDecoder().decode(checked.stderr)).toBe(0);
-    expect(new TextDecoder().decode(checked.stdout).trim()).toBe("0.1.2");
+    expect(new TextDecoder().decode(checked.stdout).trim()).toBe(packageVersion);
   });
 });
 
