@@ -48,13 +48,16 @@ skills/
   orchestrate-agent-workspaces/
     SKILL.md      Agent instructions and trigger metadata
     agents/       Codex UI metadata
-    scripts/      compiled, dependency-free CLI bundled with the Skill
+    scripts/
+      agent-workspace.js  generated, dependency-free CLI bundle
 src/              TypeScript CLI source
 bin/              npm executable launcher
 tests/            unit, integration, real-world, and package tests
 ```
 
 The standard `skills/<name>/` layout lets `npx skills add Hirate99/agent-workspace` discover the Skill with the same one-line command while copying only the self-contained Skill directory, not the npm project or its development dependencies.
+
+The TypeScript modules under `src/` are the only hand-edited CLI implementation. `npm run build` deterministically bundles them into the single committed `scripts/agent-workspace.js` file so a remotely installed Skill can run immediately with Node.js and no build step. CI rebuilds the bundle and rejects any generated diff.
 
 ## Workflow
 
