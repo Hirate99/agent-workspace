@@ -1,6 +1,6 @@
 {
   "name": "@mskyurina/agent-workspace",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "bin": {
     "agent-workspace": "bin/agent-workspace.js"
