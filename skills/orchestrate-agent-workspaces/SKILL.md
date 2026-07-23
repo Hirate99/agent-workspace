@@ -5,7 +5,7 @@ description: Create isolated Git worktree transactions for AI coding agents and 
 
 # Orchestrate Agent Workspaces
 
-Treat every writing agent as a transaction: isolate its writes, collect a commit, then integrate candidates one at a time.
+Treat every writing agent as a transaction: isolate its writes, collect a commit, then integrate candidates one at a time only when the user authorizes integration.
 
 ## Preconditions
 
@@ -16,8 +16,8 @@ Treat every writing agent as a transaction: isolate its writes, collect a commit
 
 ## Choose the transaction shape
 
-- For one implementation task or a request to start work on a new branch or workspace, create one transaction and do all writes in the returned worktree. Keep the original checkout unchanged.
-- For multiple writing agents, create one transaction per independent task and integrate them serially.
+- For one implementation task or a request to start work on a new branch or workspace, create one transaction and do all writes in the returned worktree. End the task on that requested branch or worktree; do not switch back to or integrate into the main branch as an implicit cleanup step.
+- For multiple writing agents, create one transaction per independent task. If integration is authorized, integrate them serially.
 - For read-only research, explanation, or review, do not create a worktree unless the user explicitly asks for one.
 
 ## Plan the work
@@ -83,7 +83,9 @@ node <skill-dir>/scripts/agent-workspace.js submit T123 --repo <worker-worktree>
 
 Submission must fail for dirty worktrees, merge commits, empty changes, or paths outside declared scopes. Treat that failure as task feedback; do not bypass it casually.
 
-## Integrate serially
+## Integrate serially only when authorized
+
+Creating a branch or workspace, asking for implementation there, or asking the agent to finish does not authorize integration. Run `integrate` only when the user explicitly asks to merge, land, or integrate the submitted changes into a target branch. Otherwise stop after `submit`, keep the branch and worktree available, and report the result commit and checks.
 
 Use one clean main worktree as the integration writer. Follow DAG order and integrate one submitted task at a time:
 
