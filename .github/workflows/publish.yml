@@ -173,3 +173,4 @@ jobs:
               --verify-tag \
               --generate-notes \
               --title "$RELEASE_VERSION"
+          fi
