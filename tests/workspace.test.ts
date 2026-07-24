@@ -4,11 +4,13 @@ import { join } from "node:path";
 import { git } from "../src/git.ts";
 import type { TaskState } from "../src/model.ts";
 import {
+  analyzeWorkspacePaths,
   cleanupTask,
   createTask,
   integrateTask,
   submitTask,
   taskStatus,
+  verifyTaskWorkspace,
 } from "../src/workspace.ts";
 import { cleanupFixtures, commitFile, createFixture, exists } from "./helpers.ts";
 
@@ -25,6 +27,13 @@ describe("workspace transactions", () => {
     expect(created.status).toBe("active");
     expect(await exists(created.worktree)).toBe(true);
     expect(created.port).toBeGreaterThanOrEqual(24000);
+    expect(await verifyTaskWorkspace(fixture.repo, created.id)).toMatchObject({
+      id: "T123",
+      worktree: created.worktree,
+      writable: true,
+      gitAccessible: true,
+      compatible: true,
+    });
 
     await commitFile(created.worktree, "src/feature.ts", "export const feature = true;\n", "feature");
     const submitted = await submitTask(created.worktree, created.id);
@@ -40,6 +49,22 @@ describe("workspace transactions", () => {
     const cleaned = await cleanupTask(fixture.repo, created.id);
     expect(cleaned.status).toBe("cleaned");
     expect(await exists(created.worktree)).toBe(false);
+  });
+
+  test("flags worker paths outside the Windows tool compatibility budget", () => {
+    const deepFile = `src/${"nested/".repeat(35)}feature.ts`;
+    const windows = analyzeWorkspacePaths("C:\\approved\\worker", [deepFile], "win32");
+    expect(windows).toMatchObject({
+      longestTrackedFile: deepFile,
+      pathBudget: 240,
+      compatible: false,
+    });
+    expect(windows.maxAbsolutePathLength).toBeGreaterThanOrEqual(240);
+
+    expect(analyzeWorkspacePaths("/approved/worker", [deepFile], "linux")).toMatchObject({
+      pathBudget: null,
+      compatible: true,
+    });
   });
 
   test("rejects committed paths outside declared scopes", async () => {

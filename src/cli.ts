@@ -11,12 +11,14 @@ import {
   integrateTask,
   submitTask,
   taskStatus,
+  verifyTaskWorkspace,
 } from "./workspace.js";
 
 const HELP = `agent-workspace <command> [task] [options]
 
 Commands:
   create <task>     Create an isolated branch and worktree
+  verify <task>     Check worker write, Git, and path compatibility
   prepare <task>    Install dependencies reproducibly in its worktree
   env <task>        Show its isolated runtime environment
   exec <task>       Run a command in its worktree after --
@@ -85,6 +87,10 @@ export async function main(argv: string[]): Promise<void> {
     case "env":
       assertAllowed(parsed, ["repo"]);
       result = await taskEnvironment(repo, requireId(id, command));
+      break;
+    case "verify":
+      assertAllowed(parsed, ["repo"]);
+      result = await verifyTaskWorkspace(repo, requireId(id, command));
       break;
     case "prepare": {
       assertAllowed(parsed, ["repo"]);
