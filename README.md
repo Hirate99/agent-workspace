@@ -73,6 +73,9 @@ agent-workspace create T123 \
   --scope src/payments \
   --exclusive api-schema
 
+# Confirm the worker identity can write, use Git, and stay within tool path budgets.
+agent-workspace verify T123 --repo /path/to/repo
+
 # Reproducibly install dependencies in the returned worktree.
 agent-workspace prepare T123 --repo /path/to/repo
 
@@ -92,7 +95,7 @@ agent-workspace integrate T123 \
 agent-workspace cleanup T123 --repo /path/to/repo
 ```
 
-State commands emit JSON. `prepare` and `exec` attach to the child process and preserve its exit code. Run `agent-workspace --help` for all options.
+State commands emit JSON. `prepare` and `exec` attach to the child process and preserve its exit code. Run `verify` with the same non-elevated sandbox identity that will edit the worker; it fails early when the external worktree is not writable, Git rejects its ownership, or a tracked Windows path exceeds the conservative 240-character tool compatibility budget. Recreate failures with a short, approved `--root` and verify again. Run `agent-workspace --help` for all options.
 
 ## Lightweight runtime isolation
 

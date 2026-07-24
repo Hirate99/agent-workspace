@@ -137,9 +137,20 @@ function systemTempDir() {
 }
 
 // src/workspace.ts
-import { mkdir as mkdir2, realpath, stat } from "node:fs/promises";
+import { randomUUID as randomUUID2 } from "node:crypto";
+import { mkdir as mkdir2, open as open2, realpath, stat, unlink as unlink2 } from "node:fs/promises";
 import { createServer } from "node:net";
-import { basename, dirname, isAbsolute, join as join2, normalize, relative, resolve as resolve2, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join as join2,
+  normalize,
+  relative,
+  resolve as resolve2,
+  sep,
+  win32
+} from "node:path";
 
 // src/git.ts
 import { spawn } from "node:child_process";
@@ -195,6 +206,7 @@ function runShell(command, cwd) {
 }
 
 // src/workspace.ts
+var WINDOWS_TOOL_PATH_BUDGET = 240;
 async function getRepoInfo(input) {
   const cwd = resolve2(input);
   const reportedRoot = resolve2((await git(cwd, ["rev-parse", "--show-toplevel"])).stdout.trim());
@@ -270,6 +282,52 @@ async function createTask(repoPath, id, options = {}) {
       throw error;
     }
   });
+}
+async function verifyTaskWorkspace(repoPath, id) {
+  assertTaskId(id);
+  const repo = await getRepoInfo(repoPath);
+  const state = await requireTask(repo.commonDir, id);
+  if (state.status === "cleaned" || !await pathExists(state.worktree)) {
+    throw new Error(`task worktree is missing: ${state.worktree}`);
+  }
+  await verifyWorktreeWriteAccess(state.worktree);
+  const status = await git(state.worktree, ["status", "--porcelain=v1", "--untracked-files=no"], { allowFailure: true });
+  if (status.exitCode !== 0) {
+    const detail = status.stderr.trim() || status.stdout.trim() || "git status failed";
+    throw new Error(`worker verification failed: Git cannot use ${state.worktree}: ${detail}
+` + "Grant the worker identity access to this directory and mark it as a safe Git directory before editing.");
+  }
+  const trackedFiles = (await git(state.worktree, ["ls-files", "-z"])).stdout.split("\x00").filter(Boolean);
+  const paths = analyzeWorkspacePaths(state.worktree, trackedFiles);
+  if (!paths.compatible) {
+    throw new Error(`worker verification failed: ${paths.longestTrackedFile ?? state.worktree} reaches ` + `${paths.maxAbsolutePathLength} characters, above the ${paths.pathBudget}-character ` + "Windows tool compatibility budget. Recreate the task with --root <short-approved-root>.");
+  }
+  return {
+    id,
+    worktree: state.worktree,
+    writable: true,
+    gitAccessible: true,
+    ...paths
+  };
+}
+function analyzeWorkspacePaths(worktree, trackedFiles, platform = process.platform) {
+  const resolvePath = platform === "win32" ? win32.resolve : resolve2;
+  let longestTrackedFile = null;
+  let maxAbsolutePathLength = resolvePath(worktree).length;
+  for (const file of trackedFiles) {
+    const length = resolvePath(worktree, file).length;
+    if (length > maxAbsolutePathLength) {
+      longestTrackedFile = file;
+      maxAbsolutePathLength = length;
+    }
+  }
+  const pathBudget = platform === "win32" ? WINDOWS_TOOL_PATH_BUDGET : null;
+  return {
+    longestTrackedFile,
+    maxAbsolutePathLength,
+    pathBudget,
+    compatible: pathBudget === null || maxAbsolutePathLength < pathBudget
+  };
 }
 async function submitTask(repoPath, id) {
   assertTaskId(id);
@@ -467,6 +525,21 @@ async function pathExists(path) {
       return false;
     }
     throw error;
+  }
+}
+async function verifyWorktreeWriteAccess(worktree) {
+  const probe = join2(worktree, `.agent-workspace-write-probe-${randomUUID2()}`);
+  let handle;
+  try {
+    handle = await open2(probe, "wx");
+    await handle.writeFile(`worker verification probe
+`);
+  } catch (error) {
+    throw new Error(`worker verification failed: ${worktree} is not writable by the current process: ` + `${errorMessage(error)}. Add it to the worker's writable sandbox roots or recreate the task ` + "with --root <approved-external-root>.");
+  } finally {
+    await handle?.close();
+    if (handle)
+      await unlink2(probe);
   }
 }
 async function rollbackIntegration(repo, before, reason) {
@@ -795,6 +868,7 @@ var HELP = `agent-workspace <command> [task] [options]
 
 Commands:
   create <task>     Create an isolated branch and worktree
+  verify <task>     Check worker write, Git, and path compatibility
   prepare <task>    Install dependencies reproducibly in its worktree
   env <task>        Show its isolated runtime environment
   exec <task>       Run a command in its worktree after --
@@ -854,6 +928,10 @@ async function main(argv) {
     case "env":
       assertAllowed(parsed, ["repo"]);
       result = await taskEnvironment(repo, requireId(id, command));
+      break;
+    case "verify":
+      assertAllowed(parsed, ["repo"]);
+      result = await verifyTaskWorkspace(repo, requireId(id, command));
       break;
     case "prepare": {
       assertAllowed(parsed, ["repo"]);

@@ -44,6 +44,14 @@ node <skill-dir>/scripts/agent-workspace.js create T123 \
   --exclusive api-schema
 ```
 
+Before dispatching a writing worker, verify the returned worktree using the same sandbox identity and permissions that will edit it:
+
+```sh
+node <skill-dir>/scripts/agent-workspace.js verify T123 --repo <repo>
+```
+
+Do not elevate `verify` separately. It must confirm real write access, Git safety, and the Windows tool path budget for the worker. If it fails, stop before using a patch tool. Grant the external directory as a writable workspace root or recreate the task with a short approved `--root`, then run `verify` again.
+
 Give the worker only:
 
 - the returned `worktree`, `branch`, `namespace`, `port`, and `runtimeDir`;
@@ -68,11 +76,13 @@ Do not run those commands directly from the shared main checkout. `exec` fixes t
 
 ### Managed sandbox permissions
 
-The default worker root is a sibling of the repository, which can fall outside a managed sandbox's writable roots. In that case the CLI can report the correct worker `cwd` while a child tool is denied access. Bun may first print `EPERM` for the worktree or `tsconfig.json` and then misleadingly report `Script not found`.
+The default worker root is a sibling of the repository, which can fall outside a managed sandbox's writable roots. In that case the CLI can report the correct worker `cwd` while a patch or child tool is denied access. Git may also reject the worker as having dubious ownership when the sandbox runs under a different OS identity. Bun may first print `EPERM` for the worktree or `tsconfig.json` and then misleadingly report `Script not found`.
 
+- Require a successful non-elevated `verify` before any writing agent starts.
 - Inspect `status` and use `exec <task> -- node -e "console.log(process.cwd())"` before diagnosing a `cwd` bug.
 - Treat an earlier `EPERM` or access-denied message as the primary failure.
-- Request the sandbox permission needed for `prepare` and `exec`, or create the task with `--root <approved-external-root>` where that root is writable.
+- Grant the worker directory as a writable workspace root, or create the task with `--root <short-approved-external-root>` where that root is writable.
+- On Windows, treat a `verify` path-budget failure as a compatibility failure even when Git long-path support is enabled; patch tools and filesystem filters may have lower limits.
 - Do not place the worker root inside the repository to evade the sandbox boundary; nested worktrees dirty the main checkout and are rejected.
 
 Require the worker to run focused checks and commit all intended changes. Then submit:

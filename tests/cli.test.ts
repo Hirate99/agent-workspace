@@ -21,6 +21,20 @@ test("CLI emits a durable task record as JSON", async () => {
   const created = JSON.parse(await createOutput) as { id: string; status: string };
   expect(created).toMatchObject({ id: "CLI1", status: "active" });
 
+  const verify = Bun.spawn(["node", cli, "verify", "CLI1", "--repo", fixture.repo], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const verifyOutput = new Response(verify.stdout).text();
+  const verifyError = new Response(verify.stderr).text();
+  expect(await verify.exited, await verifyError).toBe(0);
+  expect(JSON.parse(await verifyOutput)).toMatchObject({
+    id: "CLI1",
+    writable: true,
+    gitAccessible: true,
+    compatible: true,
+  });
+
   const status = Bun.spawn(["node", cli, "status", "CLI1", "--repo", fixture.repo], {
     stdout: "pipe",
     stderr: "pipe",

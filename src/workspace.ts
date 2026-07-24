@@ -1,6 +1,17 @@
-import { mkdir, realpath, stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, open, realpath, stat, unlink } from "node:fs/promises";
 import { createServer } from "node:net";
-import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  normalize,
+  relative,
+  resolve,
+  sep,
+  win32,
+} from "node:path";
 import { CommandError, git, runShell } from "./git.js";
 import {
   assertTaskId,
@@ -40,6 +51,22 @@ export interface IntegrateOptions {
 export interface CleanupOptions {
   force?: boolean;
 }
+
+export interface WorkspacePathAnalysis {
+  longestTrackedFile: string | null;
+  maxAbsolutePathLength: number;
+  pathBudget: number | null;
+  compatible: boolean;
+}
+
+export interface WorkspaceVerification extends WorkspacePathAnalysis {
+  id: string;
+  worktree: string;
+  writable: true;
+  gitAccessible: true;
+}
+
+const WINDOWS_TOOL_PATH_BUDGET = 240;
 
 export async function getRepoInfo(input: string): Promise<RepoInfo> {
   const cwd = resolve(input);
@@ -147,6 +174,76 @@ export async function createTask(
       throw error;
     }
   });
+}
+
+export async function verifyTaskWorkspace(
+  repoPath: string,
+  id: string,
+): Promise<WorkspaceVerification> {
+  assertTaskId(id);
+  const repo = await getRepoInfo(repoPath);
+  const state = await requireTask(repo.commonDir, id);
+  if (state.status === "cleaned" || !(await pathExists(state.worktree))) {
+    throw new Error(`task worktree is missing: ${state.worktree}`);
+  }
+
+  await verifyWorktreeWriteAccess(state.worktree);
+  const status = await git(
+    state.worktree,
+    ["status", "--porcelain=v1", "--untracked-files=no"],
+    { allowFailure: true },
+  );
+  if (status.exitCode !== 0) {
+    const detail = status.stderr.trim() || status.stdout.trim() || "git status failed";
+    throw new Error(
+      `worker verification failed: Git cannot use ${state.worktree}: ${detail}\n` +
+        "Grant the worker identity access to this directory and mark it as a safe Git directory before editing.",
+    );
+  }
+
+  const trackedFiles = (await git(state.worktree, ["ls-files", "-z"])).stdout
+    .split("\0")
+    .filter(Boolean);
+  const paths = analyzeWorkspacePaths(state.worktree, trackedFiles);
+  if (!paths.compatible) {
+    throw new Error(
+      `worker verification failed: ${paths.longestTrackedFile ?? state.worktree} reaches ` +
+        `${paths.maxAbsolutePathLength} characters, above the ${paths.pathBudget}-character ` +
+        "Windows tool compatibility budget. Recreate the task with --root <short-approved-root>.",
+    );
+  }
+
+  return {
+    id,
+    worktree: state.worktree,
+    writable: true,
+    gitAccessible: true,
+    ...paths,
+  };
+}
+
+export function analyzeWorkspacePaths(
+  worktree: string,
+  trackedFiles: string[],
+  platform: NodeJS.Platform = process.platform,
+): WorkspacePathAnalysis {
+  const resolvePath = platform === "win32" ? win32.resolve : resolve;
+  let longestTrackedFile: string | null = null;
+  let maxAbsolutePathLength = resolvePath(worktree).length;
+  for (const file of trackedFiles) {
+    const length = resolvePath(worktree, file).length;
+    if (length > maxAbsolutePathLength) {
+      longestTrackedFile = file;
+      maxAbsolutePathLength = length;
+    }
+  }
+  const pathBudget = platform === "win32" ? WINDOWS_TOOL_PATH_BUDGET : null;
+  return {
+    longestTrackedFile,
+    maxAbsolutePathLength,
+    pathBudget,
+    compatible: pathBudget === null || maxAbsolutePathLength < pathBudget,
+  };
 }
 
 export async function submitTask(repoPath: string, id: string): Promise<TaskState> {
@@ -397,6 +494,24 @@ async function pathExists(path: string): Promise<boolean> {
       return false;
     }
     throw error;
+  }
+}
+
+async function verifyWorktreeWriteAccess(worktree: string): Promise<void> {
+  const probe = join(worktree, `.agent-workspace-write-probe-${randomUUID()}`);
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(probe, "wx");
+    await handle.writeFile("worker verification probe\n");
+  } catch (error) {
+    throw new Error(
+      `worker verification failed: ${worktree} is not writable by the current process: ` +
+        `${errorMessage(error)}. Add it to the worker's writable sandbox roots or recreate the task ` +
+        "with --root <approved-external-root>.",
+    );
+  } finally {
+    await handle?.close();
+    if (handle) await unlink(probe);
   }
 }
 
